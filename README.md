@@ -19,7 +19,7 @@ A beautiful, modern web application for archiving and managing competitive progr
 - **Animations**: Framer Motion
 - **Code Editor**: Monaco Editor
 - **Math Rendering**: KaTeX
-- **Scraping**: Cheerio (static), Puppeteer (dynamic)
+- **Scraping**: GraphQL (LeetCode), Playwright (Codeforces, CodeChef), Cheerio (AtCoder, HTML parsing)
 - **Database**: JSON file-based (easily migratable to PostgreSQL/MongoDB)
 
 ## Getting Started
@@ -86,7 +86,8 @@ The application uses a simple JSON file-based database stored in the `data/` dir
 
 ## Notes
 
-- **Puppeteer**: Required for LeetCode parsing (dynamic content). Make sure Puppeteer is properly installed.
+- **GraphQL**: LeetCode uses their official GraphQL API for fast and reliable problem fetching (no browser required).
+- **Playwright**: Required for Codeforces and CodeChef parsing (dynamic content with anti-bot protection). Chromium browser will be automatically downloaded on first use.
 - **Data Storage**: All data is stored locally in JSON files. For production, consider migrating to a proper database.
 
 ## Development

@@ -16,22 +16,47 @@ interface ProblemCardProps {
   onDelete?: (id: string) => void;
 }
 
-const platformColors = {
-  codeforces: 'from-blue-500/20 to-cyan-500/20 border-blue-500/30',
-  leetcode: 'from-orange-500/20 to-yellow-500/20 border-orange-500/30',
-  atcoder: 'from-green-500/20 to-emerald-500/20 border-green-500/30',
-  codechef: 'from-purple-500/20 to-pink-500/20 border-purple-500/30',
+const platformTheme = {
+  codeforces: {
+    border: 'border-blue-500/30',
+    hoverBorder: 'group-hover:border-blue-500/60',
+    badge: 'bg-blue-500/10 text-blue-400',
+    icon: 'text-blue-400',
+    glow: 'group-hover:shadow-blue-500/10'
+  },
+  leetcode: {
+    border: 'border-orange-500/30',
+    hoverBorder: 'group-hover:border-orange-500/60',
+    badge: 'bg-orange-500/10 text-orange-400',
+    icon: 'text-orange-400',
+    glow: 'group-hover:shadow-orange-500/10'
+  },
+  atcoder: {
+    border: 'border-green-500/30',
+    hoverBorder: 'group-hover:border-green-500/60',
+    badge: 'bg-green-500/10 text-green-400',
+    icon: 'text-green-400',
+    glow: 'group-hover:shadow-green-500/10'
+  },
+  codechef: {
+    border: 'border-purple-500/30',
+    hoverBorder: 'group-hover:border-purple-500/60',
+    badge: 'bg-purple-500/10 text-purple-400',
+    icon: 'text-purple-400',
+    glow: 'group-hover:shadow-purple-500/10'
+  },
 };
 
 const platformLabels = {
-  codeforces: 'CF',
-  leetcode: 'LC',
-  atcoder: 'AC',
-  codechef: 'CC',
+  codeforces: 'Codeforces',
+  leetcode: 'LeetCode',
+  atcoder: 'AtCoder',
+  codechef: 'CodeChef',
 };
 
 export default function ProblemCard({ problem, onDelete }: ProblemCardProps) {
   const router = useRouter();
+  const theme = platformTheme[problem.platform];
   
   const handleClick = () => {
     router.push(`/problems/${problem.id}`);
@@ -51,10 +76,11 @@ export default function ProblemCard({ problem, onDelete }: ProblemCardProps) {
       whileHover={{ y: -4 }}
       className={`
         relative group cursor-pointer
-        bg-gradient-to-br ${platformColors[problem.platform]}
-        backdrop-blur-xl border rounded-xl p-6
+        bg-zinc-900/50 backdrop-blur-xl 
+        border ${theme.border} ${theme.hoverBorder}
+        rounded-xl p-6
         transition-all duration-300
-        hover:shadow-2xl hover:shadow-cyan-500/10
+        hover:shadow-2xl ${theme.glow}
       `}
       onClick={handleClick}
     >
@@ -71,13 +97,12 @@ export default function ProblemCard({ problem, onDelete }: ProblemCardProps) {
         <div className="flex items-center gap-2">
           <div className={`
             px-2 py-1 rounded text-xs font-bold
-            bg-white/10 backdrop-blur-sm
-            text-white
+            ${theme.badge}
           `}>
             {platformLabels[problem.platform]}
           </div>
           {problem.difficulty && (
-            <span className="text-xs px-2 py-1 rounded bg-white/5 text-zinc-300">
+            <span className="text-xs px-2 py-1 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
               {problem.difficulty}
             </span>
           )}
@@ -87,12 +112,12 @@ export default function ProblemCard({ problem, onDelete }: ProblemCardProps) {
           {problem.solution?.solved ? (
             <CheckCircle2 className="w-5 h-5 text-green-400" />
           ) : (
-            <Circle className="w-5 h-5 text-zinc-500" />
+            <Circle className={`w-5 h-5 ${theme.icon} opacity-50`} />
           )}
         </div>
       </div>
       
-      <h3 className="text-lg font-semibold text-white mb-2 line-clamp-2">
+      <h3 className="text-lg font-semibold text-white mb-2 line-clamp-2 group-hover:text-white/90 transition-colors">
         {problem.title}
       </h3>
       

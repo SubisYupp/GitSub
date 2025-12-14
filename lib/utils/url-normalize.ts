@@ -12,6 +12,12 @@ export function normalizeUrl(url: string): string {
       urlObj.pathname = urlObj.pathname.replace(/\/description\/?$/, '');
     }
     
+    if (urlObj.hostname.includes('atcoder.jp')) {
+      // Normalize AtCoder URLs - ensure consistent format
+      // Remove any trailing slashes and normalize path
+      urlObj.pathname = urlObj.pathname.replace(/\/+$/, '');
+    }
+    
     // Remove query parameters and fragments for duplicate detection
     urlObj.search = '';
     urlObj.hash = '';

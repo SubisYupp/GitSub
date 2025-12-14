@@ -1,171 +1,236 @@
-import puppeteer from 'puppeteer';
+import { chromium } from 'playwright';
 import { ProblemMetadata } from '../types';
 
 export async function parseCodechef(url: string): Promise<ProblemMetadata> {
-  // CodeChef uses React and loads content dynamically, so we need Puppeteer
-  const browser = await puppeteer.launch({ headless: true });
-  const page = await browser.newPage();
+  const browser = await chromium.launch({ 
+    headless: true 
+  });
   
   try {
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    const page = await browser.newPage();
     
-    // Wait for problem content to load - CodeChef uses various selectors
-    await page.waitForSelector('h1, [class*="problem"], [class*="statement"]', { timeout: 10000 }).catch(() => {
-      // Continue even if specific selector not found
-    });
+    // Block images and fonts to speed up loading
+    await page.route('**/*.{png,jpg,jpeg,gif,svg,woff,woff2}', route => route.abort());
     
-    // Extract problem details
-    const problemData = await page.evaluate(() => {
-      // Try multiple selectors for title
-      const titleSelectors = [
-        'h1',
-        '[class*="problem-title"]',
-        '[class*="ProblemTitle"]',
-        '.problem-statement h1',
-        'header h1',
-      ];
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+    // Wait for the problem statement to be visible
+    try {
+      await page.waitForSelector('#problem-statement, .problem-statement, h1', { timeout: 15000 });
+    } catch (e) {
+      console.log('Timeout waiting for specific selector, proceeding with available content...');
+    }
+
+    // Extract data using page.evaluate to run in browser context
+    const data = await page.evaluate(() => {
+      const doc = document;
       
+      // 1. Find Title
       let title = '';
+      const titleSelectors = ['h1', '.problem-title', 'header h1', '[class*="ProblemTitle"]'];
       for (const selector of titleSelectors) {
-        const el = document.querySelector(selector);
-        if (el) {
-          title = el.textContent?.trim() || '';
-          if (title) break;
+        const el = doc.querySelector(selector);
+        if (el && el.textContent?.trim()) {
+          title = el.textContent.trim();
+          break;
         }
       }
+
+      // 2. Find Content Container
+      let content = doc.querySelector('#problem-statement');
+      if (!content) content = doc.querySelector('[class*="problem-statement"]');
+      if (!content) content = doc.querySelector('.problem-statement');
+      if (!content) content = doc.querySelector('main'); // Fallback
+
+      if (!content) throw new Error('Could not locate problem content');
+
+      // 3. CLEANING - CRITICAL FOR DUPLICATES
       
-      // Try multiple selectors for problem statement
-      const descriptionSelectors = [
-        '[class*="problem-statement"]',
-        '[class*="ProblemStatement"]',
-        '[class*="problem-content"]',
-        '[class*="content"]',
-        '.problem-statement',
-        'main',
-      ];
+      // A. Remove MathJax/Katex duplicates
+      // Remove assistive MathML (hidden text for screen readers that causes "S S SS")
+      content.querySelectorAll('.mjx-assistive-mathml').forEach(el => el.remove());
+      content.querySelectorAll('annotation').forEach(el => el.remove());
+      content.querySelectorAll('.katex-mathml').forEach(el => el.remove());
       
-      let description = '';
-      for (const selector of descriptionSelectors) {
-        const el = document.querySelector(selector);
-        if (el) {
-          const html = el.innerHTML || '';
-          if (html.length > 100) { // Make sure we got substantial content
-            description = html;
-            break;
-          }
-        }
-      }
+      // Note: Do NOT remove [aria-hidden="true"] or script tags blindly. 
+      // MathJax often marks the visual output as aria-hidden="true" so screen readers use the assistive-mathml.
+      // Since we removed the assistive-mathml, we MUST keep the visual output.
+
+      // B. Remove UI Clutter
+      content.querySelectorAll('button').forEach(el => el.remove());
+      content.querySelectorAll('[class*="copy"]').forEach(el => el.remove());
+      content.querySelectorAll('[aria-label="Copy to clipboard"]').forEach(el => el.remove());
+      content.querySelectorAll('a[href*="learning"]').forEach(el => el.remove());
+      content.querySelectorAll('[class*="bootcamp"], [class*="banner"], [class*="social"]').forEach(el => el.remove());
       
-      // If still no description, try to get the main content area
-      if (!description) {
-        const mainContent = document.querySelector('main, [role="main"], .main-content');
-        if (mainContent) {
-          description = mainContent.innerHTML || '';
-        }
-      }
-      
-      // Extract sample test cases
+      // Remove "Submit" or "My Submissions" buttons often found at bottom
+      content.querySelectorAll('a[href*="/submit/"]').forEach(el => el.remove());
+      content.querySelectorAll('a[href*="/status/"]').forEach(el => el.remove());
+
+      // 4. Extract Sample Test Cases
       const sampleTests: Array<{ input: string; output: string }> = [];
       
-      // Look for input/output sections
-      const inputOutputSections = document.querySelectorAll('[class*="input"], [class*="output"], [class*="sample"]');
-      inputOutputSections.forEach((section) => {
-        const preTags = section.querySelectorAll('pre');
-        if (preTags.length >= 2) {
-          sampleTests.push({
-            input: preTags[0].textContent?.trim() || '',
-            output: preTags[1].textContent?.trim() || '',
+      // Strategy 1: Look for specific CodeChef "values" containers (New UI)
+      // These usually contain two pre tags: one for input, one for output.
+      const valueContainers = content.querySelectorAll('[class*="values"]');
+      if (valueContainers.length > 0) {
+          valueContainers.forEach(container => {
+              const pres = container.querySelectorAll('pre');
+              if (pres.length >= 2) {
+                  const input = pres[0].textContent?.trim() || '';
+                  const output = pres[1].textContent?.trim() || '';
+                  if (input && output) {
+                      sampleTests.push({ input, output });
+                      container.remove(); // Remove from description
+                  }
+              }
           });
-        }
-      });
-      
-      // Alternative: look for adjacent pre tags
-      if (sampleTests.length === 0) {
-        const allPre = document.querySelectorAll('pre');
-        for (let i = 0; i < allPre.length - 1; i++) {
-          const prevText = allPre[i].previousElementSibling?.textContent?.toLowerCase() || '';
-          const nextText = allPre[i + 1].previousElementSibling?.textContent?.toLowerCase() || '';
-          
-          if ((prevText.includes('input') || prevText.includes('sample')) && 
-              (nextText.includes('output') || nextText.includes('sample'))) {
-            sampleTests.push({
-              input: allPre[i].textContent?.trim() || '',
-              output: allPre[i + 1].textContent?.trim() || '',
-            });
-            i++; // Skip next pre as we used it
-          }
-        }
       }
+
+      // Strategy 2: Header Scanning (Fallback)
+      // Only run if we haven't found enough samples, or to catch stragglers
+      const headers = Array.from(content.querySelectorAll('h3, h2, h4, strong, b'));
       
-      // Extract difficulty/rating
-      const difficultySelectors = [
-        '[class*="difficulty"]',
-        '[class*="rating"]',
-        '[class*="Difficulty"]',
-        '[class*="Rating"]',
-      ];
-      
+      for (let i = 0; i < headers.length; i++) {
+        const header = headers[i];
+        const text = header.textContent?.toLowerCase() || '';
+        
+        // Check for "Sample 1", "Sample Case 1", "Input", etc.
+        if (text.includes('sample') || (text.includes('input') && !text.includes('format'))) {
+            let inputEl = null;
+            let outputEl = null;
+            let outputHeader = null;
+
+            // 1. Find Input Element (next PRE)
+            let next = header.nextElementSibling;
+            while(next && !inputEl) {
+                // Stop if we hit another major header
+                if (['H1','H2'].includes(next.tagName)) break;
+                
+                if (next.tagName === 'PRE') {
+                    inputEl = next;
+                } else if (next.querySelector('pre')) {
+                    inputEl = next.querySelector('pre');
+                }
+                next = next.nextElementSibling;
+            }
+
+            if (inputEl) {
+                // 2. Find Output Element
+                // First, look for an explicit "Output" header between Input and next PRE
+                // We need to look at the siblings of the CONTAINER of the input pre if it was nested
+                let sibling = (inputEl.tagName === 'PRE' && inputEl.parentElement !== content) 
+                    ? inputEl.parentElement?.nextElementSibling 
+                    : inputEl.nextElementSibling;
+
+                let potentialOutputHeader = null;
+                
+                // Scan a few siblings to find Output header or Output PRE
+                let scanCount = 0;
+                while(sibling && scanCount < 5 && !outputEl) {
+                    const sText = sibling.textContent?.toLowerCase() || '';
+                    
+                    if (['H1','H2'].includes(sibling.tagName)) break; // Stop at major section
+
+                    if (sText.includes('output')) {
+                        potentialOutputHeader = sibling;
+                    } else if (sibling.tagName === 'PRE') {
+                         if (potentialOutputHeader || text.includes('sample')) {
+                            outputEl = sibling;
+                            outputHeader = potentialOutputHeader;
+                        }
+                    } else if (sibling.querySelector('pre')) {
+                        // Found a wrapper with PRE
+                        if (potentialOutputHeader || text.includes('sample')) {
+                            outputEl = sibling.querySelector('pre');
+                            outputHeader = potentialOutputHeader;
+                        }
+                    }
+                    sibling = sibling.nextElementSibling;
+                    scanCount++;
+                }
+            }
+
+            if (inputEl && outputEl) {
+                const inputVal = inputEl.textContent?.trim() || '';
+                const outputVal = outputEl.textContent?.trim() || '';
+                
+                if (inputVal && outputVal) {
+                    sampleTests.push({ input: inputVal, output: outputVal });
+                    
+                    // Remove elements from DOM to clean description
+                    // Be careful to remove the wrapper if we selected a child PRE
+                    header.remove();
+                    
+                    const inputToRemove = inputEl.closest('div') && inputEl.closest('div') !== content 
+                        ? inputEl.closest('div') 
+                        : inputEl;
+                    inputToRemove?.remove();
+
+                    if (outputHeader) outputHeader.remove();
+                    
+                    const outputToRemove = outputEl.closest('div') && outputEl.closest('div') !== content 
+                        ? outputEl.closest('div') 
+                        : outputEl;
+                    outputToRemove?.remove();
+                }
+            }
+        }
+    }
+
+      // 5. Extract Metadata
       let difficulty = '';
-      for (const selector of difficultySelectors) {
-        const el = document.querySelector(selector);
-        if (el) {
-          difficulty = el.textContent?.trim() || '';
-          if (difficulty) break;
-        }
-      }
-      
-      // Extract tags
+      const diffEl = doc.querySelector('[class*="difficulty"], [class*="rating"]');
+      if (diffEl) difficulty = diffEl.textContent?.replace('Difficulty', '').trim() || '';
+
       const tags: string[] = [];
-      document.querySelectorAll('[class*="tag"], [class*="Tag"], .tag').forEach((tag) => {
-        const tagText = tag.textContent?.trim();
-        if (tagText && !tags.includes(tagText)) {
-          tags.push(tagText);
-        }
+      doc.querySelectorAll('[class*="tag"]').forEach(el => {
+        const t = el.textContent?.trim();
+        if (t) tags.push(t);
       });
+
+      // 6. Final HTML
+      // Trim whitespace
+      let descriptionHtml = content.innerHTML;
       
       return {
         title,
-        description,
-        difficulty,
+        descriptionHtml,
         sampleTests,
-        tags,
+        difficulty,
+        tags
       };
     });
-    
-    await browser.close();
-    
-    // Validate that we got at least a title or description
-    if (!problemData.title && !problemData.description) {
-      throw new Error('Could not extract problem content. The page structure may have changed or the URL is invalid.');
-    }
-    
-    // Extract problem ID from URL
+
+    // 7. Construct Result
     const urlMatch = url.match(/problems\/([^\/\?]+)/);
-    const problemId = urlMatch ? urlMatch[1] : '';
-    
-    if (!problemId) {
-      throw new Error('Could not extract problem ID from URL');
-    }
-    
+    const problemId = urlMatch ? urlMatch[1] : 'unknown';
     const id = `codechef-${problemId}`;
     const now = new Date().toISOString();
-    
+
+    // Add title to description if not present (User requested Bold Title)
+    // We prepend it to the HTML
+    const finalDescription = `<h2 class="text-2xl font-bold mb-4">${data.title}</h2>${data.descriptionHtml}`;
+
     return {
       id,
       platform: 'codechef',
       problemId,
-      title: problemData.title || `CodeChef Problem ${problemId}`,
-      description: problemData.description || '<p>Problem description could not be extracted.</p>',
-      sampleTests: problemData.sampleTests,
-      difficulty: problemData.difficulty,
-      tags: problemData.tags,
+      title: data.title || `CodeChef Problem ${problemId}`,
+      description: finalDescription,
+      sampleTests: data.sampleTests,
+      difficulty: data.difficulty,
+      tags: data.tags,
       url,
       createdAt: now,
       updatedAt: now,
     };
+
   } catch (error) {
-    await browser.close();
+    console.error(`Error parsing CodeChef URL ${url}:`, error);
     throw error;
+  } finally {
+    await browser.close();
   }
 }
 
