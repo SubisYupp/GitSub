@@ -5,14 +5,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import URLInput from './components/URLInput';
 import ProblemCard from './components/ProblemCard';
 import { ProblemWithDetails, Codelist, Platform, PLATFORMS } from '@/lib/types';
-import { Code2, Sparkles, Filter, List, Plus, X, ChevronDown, Search } from 'lucide-react';
+import { Activity, Sparkles, Filter, List, Plus, X, ChevronDown, Search, LayoutGrid, LayoutList } from 'lucide-react';
 
 type SolvedFilter = 'all' | 'solved' | 'unsolved';
+type ViewMode = 'grid' | 'list';
 
 export default function Home() {
   const [problems, setProblems] = useState<ProblemWithDetails[]>([]);
   const [codelists, setCodelists] = useState<Codelist[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // View mode
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -226,11 +230,11 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-lg">
-              <Code2 className="w-6 h-6 text-white" />
+              <Activity className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">CodeVault</h1>
-              <p className="text-sm text-zinc-400">Your Competitive Programming Archive</p>
+              <h1 className="text-2xl font-bold text-white">CPulse</h1>
+              <p className="text-sm text-zinc-400">Track your competitive programming pulse</p>
             </div>
           </div>
         </div>
@@ -251,7 +255,7 @@ export default function Home() {
           </div>
           <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
             Paste a problem URL from Codeforces, LeetCode, AtCoder, or CodeChef
-            and automatically extract all the details into your personal vault.
+            and automatically track your progress.
           </p>
         </motion.div>
         
@@ -406,9 +410,37 @@ export default function Home() {
           </div>
         </div>
         
-        {/* Results count */}
-        <div className="mb-4 text-sm text-zinc-500">
-          Showing {filteredProblems.length} of {problems.length} problems
+        {/* Results count and View Toggle */}
+        <div className="mb-4 flex items-center justify-between">
+          <span className="text-sm text-zinc-500">
+            Showing {filteredProblems.length} of {problems.length} problems
+          </span>
+          
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-1 bg-zinc-900 border border-white/10 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-2 rounded transition-colors ${
+                viewMode === 'grid' 
+                  ? 'bg-cyan-500/20 text-cyan-400' 
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+              title="Grid view"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded transition-colors ${
+                viewMode === 'list' 
+                  ? 'bg-cyan-500/20 text-cyan-400' 
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+              title="List view"
+            >
+              <LayoutList className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         
         {/* Problems Grid */}
@@ -423,12 +455,12 @@ export default function Home() {
             animate={{ opacity: 1 }}
             className="text-center py-20"
           >
-            <Code2 className="w-16 h-16 text-zinc-700 mx-auto mb-4" />
+            <Activity className="w-16 h-16 text-zinc-700 mx-auto mb-4" />
             {problems.length === 0 ? (
               <>
-                <p className="text-zinc-400 text-lg">Your vault is empty</p>
+                <p className="text-zinc-400 text-lg">No problems yet</p>
                 <p className="text-zinc-500 text-sm mt-2">
-                  Add your first problem to get started!
+                  Add your first problem to start tracking!
                 </p>
               </>
             ) : (
@@ -443,7 +475,7 @@ export default function Home() {
               </>
             )}
           </motion.div>
-        ) : (
+        ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProblems.map((problem) => (
               <ProblemCard
@@ -453,6 +485,20 @@ export default function Home() {
                 codelists={codelists}
                 onAddToCodelist={handleAddToCodelist}
                 onRemoveFromCodelist={handleRemoveFromCodelist}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredProblems.map((problem) => (
+              <ProblemCard
+                key={problem.id}
+                problem={problem}
+                onDelete={handleDelete}
+                codelists={codelists}
+                onAddToCodelist={handleAddToCodelist}
+                onRemoveFromCodelist={handleRemoveFromCodelist}
+                viewMode="list"
               />
             ))}
           </div>
