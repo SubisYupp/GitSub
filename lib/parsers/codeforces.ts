@@ -3,15 +3,66 @@ import { ProblemMetadata } from '../types';
 import { withBrowserContext } from './browser-manager';
 
 /**
+ * Convert Codeforces $$$ delimiters to standard $ delimiters
+ * Codeforces uses $$$...$$$  for inline math instead of standard $...$
+ */
+function convertCodeforcesLatex(text: string): string {
+  // Convert $$$ inline math to $ (must be done before $$ block math)
+  // Match $$$...$$$  and convert to $...$
+  return text.replace(/\$\$\$([^$]+)\$\$\$/g, '$$$1$$');
+}
+
+/**
+ * Extract text from HTML while preserving spaces around inline elements
+ * This is crucial for Codeforces which uses inline math that can lose spacing
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractTextWithSpaces($: cheerio.CheerioAPI, element: any): string {
+  // Clone to avoid modifying original
+  const clone = element.clone();
+  
+  // Get HTML and process it
+  let html = clone.html() || '';
+  
+  // Add spaces around block-level elements to ensure proper text separation
+  html = html.replace(/<(p|div|br|li|ul|ol|h[1-6])[^>]*>/gi, ' ');
+  html = html.replace(/<\/(p|div|li|ul|ol|h[1-6])>/gi, ' ');
+  
+  // Add spaces around inline math and span elements to preserve word boundaries
+  html = html.replace(/<span[^>]*>/gi, ' ');
+  html = html.replace(/<\/span>/gi, ' ');
+  
+  // Convert HTML entities
+  html = html.replace(/&nbsp;/g, ' ');
+  html = html.replace(/&lt;/g, '<');
+  html = html.replace(/&gt;/g, '>');
+  html = html.replace(/&amp;/g, '&');
+  html = html.replace(/&quot;/g, '"');
+  
+  // Remove all remaining HTML tags
+  html = html.replace(/<[^>]+>/g, ' ');
+  
+  // Convert Codeforces $$$ to standard $
+  html = convertCodeforcesLatex(html);
+  
+  // Clean up multiple spaces but preserve single spaces
+  html = html.replace(/\s+/g, ' ').trim();
+  
+  return html;
+}
+
+/**
  * Convert MathJax-rendered HTML back to clean text with $latex$ markers
  */
-function cleanMathJaxHtml($: cheerio.CheerioAPI, element: cheerio.Cheerio<cheerio.Element>): string {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function cleanMathJaxHtml($: cheerio.CheerioAPI, element: any): string {
   // Clone to avoid modifying original
   const clone = element.clone();
   
   // Step 1: Replace <script type="math/tex"> with $latex$
   // The script tags contain the original LaTeX - this is the source of truth
-  clone.find('script[type="math/tex"]').each((_, elem) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  clone.find('script[type="math/tex"]').each((_: number, elem: any) => {
     const latex = $(elem).text().trim();
     const id = $(elem).attr('id') || '';
     const isDisplay = id.includes('Display');
@@ -31,10 +82,13 @@ function cleanMathJaxHtml($: cheerio.CheerioAPI, element: cheerio.Cheerio<cheeri
   // Step 3: Get cleaned HTML
   let html = clone.html() || '';
   
-  // Step 4: Clean up whitespace carefully - preserve $...$ intact
+  // Step 4: Convert Codeforces $$$ delimiters to standard $ delimiters
+  html = convertCodeforcesLatex(html);
+  
+  // Step 5: Clean up whitespace carefully - preserve $...$ intact
   // First, protect the $...$ expressions
   const mathExpressions: string[] = [];
-  html = html.replace(/\$\$[^$]+\$\$|\$[^$]+\$/g, (match) => {
+  html = html.replace(/\$\$[^$]+\$\$|\$[^$]+\$/g, (match: string) => {
     mathExpressions.push(match);
     return `__MATH_${mathExpressions.length - 1}__`;
   });
@@ -46,7 +100,7 @@ function cleanMathJaxHtml($: cheerio.CheerioAPI, element: cheerio.Cheerio<cheeri
     .trim();
   
   // Restore math expressions with proper spacing
-  html = html.replace(/__MATH_(\d+)__/g, (_, index) => {
+  html = html.replace(/__MATH_(\d+)__/g, (_: string, index: string) => {
     return ` ${mathExpressions[parseInt(index)]} `;
   });
   
@@ -79,8 +133,6 @@ export async function parseCodeforces(url: string): Promise<ProblemMetadata> {
     });
     
     const html = await page.content();
-    await context.close();
-    await browser.close();
     
     const $ = cheerio.load(html);
     
@@ -116,8 +168,9 @@ export async function parseCodeforces(url: string): Promise<ProblemMetadata> {
     const outputSpec = outputSpecElem.length > 0 ? cleanMathJaxHtml($, outputSpecElem) : '';
     
     // Extract sample tests - preserve newlines properly
-    const sampleTests: Array<{ input: string; output: string }> = [];
-    $('.sample-test').each((_, elem) => {
+    const sampleTests: Array<{ input: string; output: string; explanation?: string; images?: string[] }> = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    $('.sample-test').each((_: number, elem: any) => {
       // Get all input/output pairs within this sample-test block
       const inputs = $(elem).find('.input');
       const outputs = $(elem).find('.output');
@@ -166,6 +219,109 @@ export async function parseCodeforces(url: string): Promise<ProblemMetadata> {
         }
       });
     });
+    
+    // Extract Note section (contains explanations for sample tests)
+    const noteSection = problemStatement.find('.note');
+    if (noteSection.length > 0 && sampleTests.length > 0) {
+      // Extract images from the Note section
+      const noteImages: string[] = [];
+      noteSection.find('img').each((_, elem) => {
+        let src = $(elem).attr('src');
+        if (src) {
+          // Make relative URLs absolute
+          if (src.startsWith('//')) {
+            src = 'https:' + src;
+          } else if (src.startsWith('/')) {
+            src = 'https://codeforces.com' + src;
+          }
+          if (!noteImages.includes(src)) {
+            noteImages.push(src);
+          }
+        }
+      });
+      
+      // Use extractTextWithSpaces to properly preserve spacing around inline math
+      let noteText = extractTextWithSpaces($, noteSection);
+      
+      // Try to parse and assign explanations to specific test cases
+      // Codeforces often has patterns like "In the first test case..." or "In the first example..."
+      const testPatterns = [
+        /(?:in\s+)?(?:the\s+)?(?:first|1st)\s+(?:test\s+case|example|sample)/gi,
+        /(?:in\s+)?(?:the\s+)?(?:second|2nd)\s+(?:test\s+case|example|sample)/gi,
+        /(?:in\s+)?(?:the\s+)?(?:third|3rd)\s+(?:test\s+case|example|sample)/gi,
+        /(?:in\s+)?(?:the\s+)?(?:fourth|4th)\s+(?:test\s+case|example|sample)/gi,
+      ];
+      
+      // If there's only one sample test, assign the whole note to it
+      if (sampleTests.length === 1) {
+        // Remove "Note" header if present
+        let cleanNote = noteText.replace(/^Note\s*/i, '').trim();
+        if (cleanNote) {
+          sampleTests[0].explanation = cleanNote;
+          if (noteImages.length > 0) {
+            sampleTests[0].images = noteImages;
+          }
+        }
+      } else {
+        // Try to split the note by test case references
+        // For now, if we can't parse individual explanations, 
+        // attach the entire note to the first sample as general explanation
+        let cleanNote = noteText.replace(/^Note\s*/i, '').trim();
+        if (cleanNote) {
+          // Try to find sections for each test
+          const lines = cleanNote.split('\n');
+          let currentTestIndex = -1;
+          let explanations: string[] = [];
+          
+          lines.forEach(line => {
+            const lineLower = line.toLowerCase();
+            if (lineLower.includes('first') || lineLower.includes('1st') || /\b1\b/.test(line)) {
+              if (lineLower.includes('test') || lineLower.includes('example') || lineLower.includes('sample')) {
+                currentTestIndex = 0;
+              }
+            } else if (lineLower.includes('second') || lineLower.includes('2nd') || /\b2\b/.test(line)) {
+              if (lineLower.includes('test') || lineLower.includes('example') || lineLower.includes('sample')) {
+                currentTestIndex = 1;
+              }
+            } else if (lineLower.includes('third') || lineLower.includes('3rd') || /\b3\b/.test(line)) {
+              if (lineLower.includes('test') || lineLower.includes('example') || lineLower.includes('sample')) {
+                currentTestIndex = 2;
+              }
+            }
+            
+            if (currentTestIndex >= 0 && currentTestIndex < sampleTests.length) {
+              if (!explanations[currentTestIndex]) {
+                explanations[currentTestIndex] = '';
+              }
+              explanations[currentTestIndex] += line + '\n';
+            }
+          });
+          
+          // Assign parsed explanations
+          explanations.forEach((exp, idx) => {
+            if (exp && sampleTests[idx]) {
+              sampleTests[idx].explanation = exp.trim();
+            }
+          });
+          
+          // If no individual explanations were parsed, add the whole note to first test
+          const hasAnyExplanation = sampleTests.some(t => t.explanation);
+          if (!hasAnyExplanation && cleanNote) {
+            sampleTests[0].explanation = cleanNote;
+            if (noteImages.length > 0) {
+              sampleTests[0].images = noteImages;
+            }
+          } else if (noteImages.length > 0) {
+            // If there are images but we parsed individual explanations,
+            // add images to the first sample that has an explanation
+            const firstWithExplanation = sampleTests.find(t => t.explanation);
+            if (firstWithExplanation) {
+              firstWithExplanation.images = noteImages;
+            }
+          }
+        }
+      }
+    }
     
     // Extract tags
     const tags: string[] = [];
