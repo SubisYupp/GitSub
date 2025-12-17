@@ -47,17 +47,42 @@ export async function getProblems(): Promise<ProblemMetadata[]> {
 export async function getProblemById(id: string): Promise<ProblemMetadata | null> {
   const supabase = await createClient();
   
-  const { data, error } = await supabase
-    .from('problems')
-    .select('*')
-    .eq('id', id)
-    .single();
+  // Check if it's a parser-generated ID (e.g., "codeforces-2176D") vs UUID
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
   
-  if (error || !data) {
-    return null;
+  if (isUUID) {
+    const { data, error } = await supabase
+      .from('problems')
+      .select('*')
+      .eq('id', id)
+      .single();
+    
+    if (error || !data) {
+      return null;
+    }
+    
+    return mapDbProblemToType(data);
   }
   
-  return mapDbProblemToType(data);
+  // Parse the custom ID format: "platform-problemId"
+  const match = id.match(/^(codeforces|leetcode|atcoder|codechef)-(.+)$/);
+  if (match) {
+    const [, source, sourceId] = match;
+    const { data, error } = await supabase
+      .from('problems')
+      .select('*')
+      .eq('source', source)
+      .eq('source_id', sourceId)
+      .single();
+    
+    if (error || !data) {
+      return null;
+    }
+    
+    return mapDbProblemToType(data);
+  }
+  
+  return null;
 }
 
 export async function getProblemByUrl(url: string): Promise<ProblemMetadata | null> {
@@ -79,8 +104,8 @@ export async function getProblemByUrl(url: string): Promise<ProblemMetadata | nu
 export async function saveProblem(problem: ProblemMetadata): Promise<ProblemMetadata> {
   const supabase = await createClient();
   
+  // Don't include 'id' - let the database auto-generate UUID
   const dbProblem = {
-    id: problem.id,
     source: problem.platform,
     source_id: problem.problemId,
     url: problem.url,
@@ -95,9 +120,10 @@ export async function saveProblem(problem: ProblemMetadata): Promise<ProblemMeta
     updated_at: new Date().toISOString(),
   };
   
+  // Upsert based on url (unique constraint)
   const { data, error } = await supabase
     .from('problems')
-    .upsert(dbProblem, { onConflict: 'id' })
+    .upsert(dbProblem, { onConflict: 'url' })
     .select()
     .single();
   
