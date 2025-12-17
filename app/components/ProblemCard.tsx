@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ProblemWithDetails, Codelist } from '@/lib/types';
 import { CheckCircle2, Circle, Trash2, List, Check, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { getPlatformLogo } from './PlatformLogos';
 
 interface ProblemCardProps {
   problem: ProblemWithDetails;
@@ -126,9 +127,15 @@ export default function ProblemCard({
         onClick={handleClick}
       >
         {/* Platform badge */}
-        <div className={`px-2 py-1 rounded text-xs font-medium ${theme.text} ${theme.bg} border ${theme.border} min-w-[90px] text-center`}>
-          {platformLabels[problem.platform]}
-        </div>
+        {(() => {
+          const Logo = getPlatformLogo(problem.platform);
+          return (
+            <div className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${theme.text} ${theme.bg} border ${theme.border} min-w-[100px]`}>
+              {Logo && <Logo className="w-3.5 h-3.5" />}
+              {platformLabels[problem.platform]}
+            </div>
+          );
+        })()}
         
         {/* Problem ID */}
         <span className="text-zinc-500 text-sm font-mono min-w-[80px]">
@@ -350,9 +357,15 @@ export default function ProblemCard({
       )}
       
       {/* Platform label */}
-      <span className={`text-xs font-medium ${theme.text} uppercase tracking-wide`}>
-        {platformLabels[problem.platform]}
-      </span>
+      {(() => {
+        const Logo = getPlatformLogo(problem.platform);
+        return (
+          <span className={`flex items-center gap-1.5 text-xs font-medium ${theme.text} uppercase tracking-wide`}>
+            {Logo && <Logo className="w-4 h-4" />}
+            {platformLabels[problem.platform]}
+          </span>
+        );
+      })()}
       
       {/* Problem title */}
       <h3 className="text-white font-medium mt-2 line-clamp-2">
