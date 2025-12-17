@@ -1,6 +1,6 @@
-import { chromium } from 'playwright';
 import * as cheerio from 'cheerio';
 import { ProblemMetadata } from '../types';
+import { withBrowserContext } from './browser-manager';
 
 /**
  * Clean up LaTeX/math expressions in text
@@ -135,19 +135,9 @@ export async function parseAtcoder(url: string): Promise<ProblemMetadata> {
   const taskId = urlMatch[2];
   const problemId = `${contestId}-${taskId}`;
   
-  // Use Playwright for better reliability with AtCoder
-  const browser = await chromium.launch({ 
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-  });
-  const context = await browser.newContext({
-    viewport: { width: 1920, height: 1080 },
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    locale: 'en-US',
-  });
-  const page = await context.newPage();
-  
-  try {
+  return withBrowserContext(async (context) => {
+    const page = await context.newPage();
+    
     console.log(`Navigating to AtCoder: ${url}`);
     
     // Navigate to the page
@@ -166,13 +156,10 @@ export async function parseAtcoder(url: string): Promise<ProblemMetadata> {
     }
     
     // Additional wait for content
-    await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(2000);
     
     // Get the HTML content
     const html = await page.content();
-    await context.close();
-    await browser.close();
     
     // Parse with Cheerio
     const $ = cheerio.load(html);
@@ -488,9 +475,5 @@ export async function parseAtcoder(url: string): Promise<ProblemMetadata> {
       createdAt: now,
       updatedAt: now,
     };
-  } catch (error) {
-    await context.close().catch(() => {});
-    await browser.close().catch(() => {});
-    throw error;
-  }
+  });
 }
