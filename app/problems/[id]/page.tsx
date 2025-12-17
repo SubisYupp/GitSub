@@ -188,15 +188,15 @@ export default function ProblemDetailPage() {
                     className="bg-zinc-900/50 rounded-lg p-4 border border-white/10"
                   >
                     <div className="mb-3">
-                      <p className="text-sm font-medium text-zinc-400 mb-1">Input:</p>
-                      <pre className="text-sm text-zinc-300 bg-black/50 p-3 rounded overflow-x-auto">
-                        {test.input}
+                      <p className="text-sm font-medium text-zinc-400 mb-2">Input:</p>
+                      <pre className="text-sm text-zinc-300 bg-black/50 p-3 rounded overflow-x-auto whitespace-pre-wrap font-mono">
+{test.input}
                       </pre>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-zinc-400 mb-1">Output:</p>
-                      <pre className="text-sm text-zinc-300 bg-black/50 p-3 rounded overflow-x-auto">
-                        {test.output}
+                      <p className="text-sm font-medium text-zinc-400 mb-2">Output:</p>
+                      <pre className="text-sm text-zinc-300 bg-black/50 p-3 rounded overflow-x-auto whitespace-pre-wrap font-mono">
+{test.output}
                       </pre>
                     </div>
                   </div>
