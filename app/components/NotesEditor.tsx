@@ -33,9 +33,11 @@ export default function NotesEditor({
           <FileText className="w-4 h-4" />
           <span className="font-medium">Notes</span>
         </div>
-        <button
+        <motion.button
           onClick={handleSave}
           disabled={saving}
+          whileHover={!saving ? { scale: 1.02 } : {}}
+          whileTap={!saving ? { scale: 0.98 } : {}}
           className="
             flex items-center gap-2 px-4 py-1.5
             bg-cyan-500/20 hover:bg-cyan-500/30
@@ -44,9 +46,24 @@ export default function NotesEditor({
             transition-colors
           "
         >
-          <Save className="w-4 h-4" />
-          {saving ? 'Saving...' : 'Save'}
-        </button>
+          <motion.span
+            animate={saving ? { rotate: 360 } : { rotate: 0 }}
+            transition={saving ? { repeat: Infinity, duration: 1, ease: "linear" } : {}}
+          >
+            <Save className="w-4 h-4" />
+          </motion.span>
+          <AnimatePresence mode="wait">
+            <motion.span
+              key={saving ? 'saving' : 'save'}
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -5 }}
+              transition={{ duration: 0.15 }}
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </motion.span>
+          </AnimatePresence>
+        </motion.button>
       </div>
       
       {/* Saved Toast Notification */}
