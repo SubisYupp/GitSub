@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveNotes, getNotesByProblemId } from '@/lib/db';
+import { getAuthenticatedUser } from '@/lib/supabase/db';
+import * as supabaseDb from '@/lib/supabase/db';
+import * as localDb from '@/lib/db';
 import { UserNotes } from '@/lib/types';
 import { randomUUID } from 'crypto';
+
+// Check if Supabase is configured
+const useSupabase = () => {
+  return !!(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,8 +25,25 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Check if notes exist
-    const existing = await getNotesByProblemId(problemId);
+    if (useSupabase()) {
+      const user = await getAuthenticatedUser();
+      if (!user) {
+        return NextResponse.json(
+          { success: false, error: 'Authentication required' },
+          { status: 401 }
+        );
+      }
+      
+      const notes = await supabaseDb.saveNotes(user.id, {
+        problemId,
+        content: content || '',
+      });
+      
+      return NextResponse.json({ success: true, data: notes });
+    }
+    
+    // Fallback to local
+    const existing = await localDb.getNotesByProblemId(problemId);
     
     const now = new Date().toISOString();
     const notes: UserNotes = {
@@ -27,7 +54,7 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     };
     
-    await saveNotes(notes);
+    await localDb.saveNotes(notes);
     
     return NextResponse.json({ success: true, data: notes });
   } catch (error) {
