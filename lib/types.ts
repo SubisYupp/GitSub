@@ -1,4 +1,17 @@
-export type Platform = 'codeforces' | 'atcoder' | 'codechef' | 'leetcode';
+// Platform constants and type
+export const PLATFORMS = ['codeforces', 'atcoder', 'codechef', 'leetcode'] as const;
+export type Platform = typeof PLATFORMS[number];
+
+// Helper to check if a string is a valid platform
+export function isValidPlatform(value: string): value is Platform {
+  return PLATFORMS.includes(value as Platform);
+}
+
+export interface SampleTest {
+  input: string;
+  output: string;
+  explanation?: string;
+}
 
 export interface ProblemMetadata {
   id: string;
@@ -9,11 +22,7 @@ export interface ProblemMetadata {
   constraints?: string;
   inputFormat?: string;
   outputFormat?: string;
-  sampleTests: Array<{
-    input: string;
-    output: string;
-    explanation?: string;
-  }>;
+  sampleTests: SampleTest[];
   difficulty?: string;
   tags: string[];
   url: string;
@@ -53,5 +62,15 @@ export interface ParseProblemResponse {
   success: boolean;
   data?: ProblemMetadata;
   error?: string;
+}
+
+// Codelist - like a playlist for problems
+export interface Codelist {
+  id: string;
+  name: string;
+  description?: string;
+  problemIds: string[];
+  createdAt: string;
+  updatedAt: string;
 }
 
