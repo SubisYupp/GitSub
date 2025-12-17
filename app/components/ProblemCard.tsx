@@ -12,6 +12,7 @@ interface ProblemCardProps {
   codelists?: Codelist[];
   onAddToCodelist?: (problemId: string, codelistId: string) => void;
   onRemoveFromCodelist?: (problemId: string, codelistId: string) => void;
+  viewMode?: 'grid' | 'list';
 }
 
 const platformTheme = {
@@ -58,6 +59,7 @@ export default function ProblemCard({
   codelists = [],
   onAddToCodelist,
   onRemoveFromCodelist,
+  viewMode = 'grid',
 }: ProblemCardProps) {
   const router = useRouter();
   const theme = platformTheme[problem.platform];
@@ -90,7 +92,133 @@ export default function ProblemCard({
       onAddToCodelist?.(problem.id, codelistId);
     }
   };
-  
+
+  // List View
+  if (viewMode === 'list') {
+    return (
+      <motion.div
+        initial={{ opacity: 0, x: -10 }}
+        animate={{ opacity: 1, x: 0 }}
+        whileHover={{ x: 2 }}
+        className={`
+          relative group cursor-pointer
+          ${theme.bg} backdrop-blur-sm
+          border ${theme.border} ${theme.hoverBorder}
+          rounded-lg px-4 py-3
+          transition-all duration-200
+          hover:shadow-lg ${theme.glow}
+          flex items-center gap-4
+        `}
+        onClick={handleClick}
+      >
+        {/* Platform badge */}
+        <div className={`px-2 py-1 rounded text-xs font-medium ${theme.text} ${theme.bg} border ${theme.border} min-w-[90px] text-center`}>
+          {platformLabels[problem.platform]}
+        </div>
+        
+        {/* Problem ID */}
+        <span className="text-zinc-500 text-sm font-mono min-w-[80px]">
+          {problem.problemId}
+        </span>
+        
+        {/* Problem title */}
+        <h3 className="text-white font-medium flex-1 truncate">
+          {problem.title}
+        </h3>
+        
+        {/* Codelist badges */}
+        <div className="flex items-center gap-1">
+          {problemCodelists.slice(0, 2).map(cl => (
+            <span 
+              key={cl.id}
+              className="px-1.5 py-0.5 text-xs bg-cyan-500/20 text-cyan-400 rounded"
+            >
+              {cl.name}
+            </span>
+          ))}
+          {problemCodelists.length > 2 && (
+            <span className="text-xs text-zinc-500">+{problemCodelists.length - 2}</span>
+          )}
+        </div>
+        
+        {/* Solved indicator */}
+        <div className="flex items-center gap-1.5 min-w-[80px]">
+          {problem.solution?.solved ? (
+            <>
+              <CheckCircle2 className="w-4 h-4 text-green-400" />
+              <span className="text-xs text-green-400">Solved</span>
+            </>
+          ) : (
+            <>
+              <Circle className="w-4 h-4 text-zinc-500" />
+              <span className="text-xs text-zinc-500">Unsolved</span>
+            </>
+          )}
+        </div>
+        
+        {/* Codelist button */}
+        {codelists.length > 0 && (
+          <div className="relative">
+            <button
+              onClick={handleCodelistToggle}
+              className={`
+                p-1.5 rounded transition-all
+                ${showCodelistMenu || problemCodelists.length > 0
+                  ? 'bg-cyan-500/20'
+                  : 'opacity-0 group-hover:opacity-100 hover:bg-white/10'
+                }
+              `}
+            >
+              <List className={`w-4 h-4 ${problemCodelists.length > 0 ? 'text-cyan-400' : 'text-zinc-400'}`} />
+            </button>
+            
+            {/* Codelist Dropdown */}
+            {showCodelistMenu && (
+              <div 
+                className="absolute top-8 right-0 z-20 w-48 py-1 bg-zinc-900 border border-white/10 rounded-lg shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-3 py-2 text-xs text-zinc-500 uppercase tracking-wide border-b border-white/10">
+                  Add to Codelist
+                </div>
+                {codelists.map(cl => {
+                  const isInCodelist = cl.problemIds.includes(problem.id);
+                  return (
+                    <button
+                      key={cl.id}
+                      onClick={(e) => handleCodelistAction(e, cl.id, isInCodelist)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-white/5 transition-colors"
+                    >
+                      {isInCodelist ? (
+                        <Check className="w-4 h-4 text-cyan-400" />
+                      ) : (
+                        <Plus className="w-4 h-4 text-zinc-500" />
+                      )}
+                      <span className={isInCodelist ? 'text-cyan-400' : 'text-white'}>
+                        {cl.name}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Delete button */}
+        {onDelete && (
+          <button
+            onClick={handleDelete}
+            className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 hover:bg-red-500/20 rounded"
+          >
+            <Trash2 className="w-4 h-4 text-red-400" />
+          </button>
+        )}
+      </motion.div>
+    );
+  }
+
+  // Grid View (default)
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
