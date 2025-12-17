@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Activity } from 'lucide-react';
 import ProblemStatement from '@/app/components/ProblemStatement';
 import CodeEditor from '@/app/components/CodeEditor';
 import NotesEditor from '@/app/components/NotesEditor';
