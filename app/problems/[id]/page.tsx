@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, ExternalLink, Activity } from 'lucide-react';
 import ProblemStatement from '@/app/components/ProblemStatement';
 import CodeEditor from '@/app/components/CodeEditor';
 import NotesEditor from '@/app/components/NotesEditor';
+import { MathText } from '@/app/components/MathText';
 import { ProblemWithDetails } from '@/lib/types';
 
 export default function ProblemDetailPage() {
@@ -139,26 +140,34 @@ export default function ProblemDetailPage() {
       <header className="border-b border-white/10 bg-black/20 backdrop-blur-xl sticky top-0 z-10">
         <div className="max-w-[1800px] mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <button
+            <motion.button
+              whileHover={{ x: -3 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => router.push('/')}
               className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
-              Back to Vault
-            </button>
+              Back to CPulse
+            </motion.button>
             
             <div className="flex items-center gap-4">
-              <h1 className="text-xl font-semibold text-white line-clamp-1">
+              <motion.h1 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="text-xl font-semibold text-white line-clamp-1"
+              >
                 {problem.title}
-              </h1>
-              <a
+              </motion.h1>
+              <motion.a
+                whileHover={{ scale: 1.1, rotate: 5 }}
+                whileTap={{ scale: 0.9 }}
                 href={problem.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-2 hover:bg-white/10 rounded-lg transition-colors"
               >
                 <ExternalLink className="w-5 h-5 text-zinc-400" />
-              </a>
+              </motion.a>
             </div>
           </div>
         </div>
@@ -183,23 +192,65 @@ export default function ProblemDetailPage() {
               <div className="mt-8 space-y-4">
                 <h3 className="text-xl font-semibold text-white mb-4">Sample Tests</h3>
                 {problem.sampleTests.map((test, idx) => (
-                  <div
+                  <motion.div
                     key={idx}
-                    className="bg-zinc-900/50 rounded-lg p-4 border border-white/10"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: idx * 0.1 + 0.2 }}
+                    whileHover={{ scale: 1.01 }}
+                    className="bg-zinc-900/50 rounded-lg p-4 border border-white/10 transition-all hover:border-white/20"
                   >
-                    <div className="mb-3">
-                      <p className="text-sm font-medium text-zinc-400 mb-2">Input:</p>
-                      <pre className="text-sm text-zinc-300 bg-black/50 p-3 rounded overflow-x-auto whitespace-pre-wrap font-mono">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="px-2 py-0.5 text-xs font-medium bg-cyan-500/20 text-cyan-400 rounded">
+                        Sample {idx + 1}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                      <div>
+                        <p className="text-sm font-medium text-zinc-400 mb-2">Input:</p>
+                        <pre className="text-sm text-zinc-300 bg-black/50 p-3 rounded overflow-x-auto whitespace-pre-wrap font-mono">
 {test.input}
-                      </pre>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-zinc-400 mb-2">Output:</p>
-                      <pre className="text-sm text-zinc-300 bg-black/50 p-3 rounded overflow-x-auto whitespace-pre-wrap font-mono">
+                        </pre>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-zinc-400 mb-2">Output:</p>
+                        <pre className="text-sm text-zinc-300 bg-black/50 p-3 rounded overflow-x-auto whitespace-pre-wrap font-mono">
 {test.output}
-                      </pre>
+                        </pre>
+                      </div>
                     </div>
-                  </div>
+                    {(test.explanation || test.images) && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="mt-3 pt-3 border-t border-white/10"
+                      >
+                        <p className="text-sm font-medium text-amber-400 mb-2 flex items-center gap-1.5">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Explanation:
+                        </p>
+                        <div className="text-sm text-zinc-300 bg-amber-500/5 border border-amber-500/20 p-3 rounded leading-relaxed">
+                          {test.explanation && <MathText text={test.explanation} />}
+                          {test.images && test.images.length > 0 && (
+                            <div className="mt-3 space-y-3">
+                              {test.images.map((imgSrc, imgIdx) => (
+                                <div key={imgIdx} className="rounded overflow-hidden border border-white/10">
+                                  <img 
+                                    src={imgSrc} 
+                                    alt={`Explanation image ${imgIdx + 1}`}
+                                    className="max-w-full h-auto bg-white/5"
+                                    loading="lazy"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </motion.div>
                 ))}
               </div>
             )}
