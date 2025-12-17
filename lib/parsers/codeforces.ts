@@ -115,15 +115,17 @@ export async function parseCodeforces(url: string): Promise<ProblemMetadata> {
     // Configure context for Codeforces - disable JS to get raw HTML with script tags intact
     const page = await context.newPage();
     
-    // Disable JavaScript by intercepting and modifying the page
-    await page.route('**/*', (route) => {
-      const resourceType = route.request().resourceType();
-      if (resourceType === 'script') {
-        route.abort();
-      } else {
-        route.continue();
-      }
-    });
+    // Disable JavaScript by intercepting and modifying the page (only available in Playwright)
+    if (page.route) {
+      await page.route('**/*', (route: any) => {
+        const resourceType = route.request().resourceType();
+        if (resourceType === 'script') {
+          route.abort();
+        } else {
+          route.continue();
+        }
+      });
+    }
   
     console.log(`Navigating to Codeforces: ${url}`);
     
