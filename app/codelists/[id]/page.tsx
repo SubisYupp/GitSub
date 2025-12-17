@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, List, Trash2, Edit2, Check, X, Activity } from 'lucide-react';
 import ProblemCard from '@/app/components/ProblemCard';
 import { ProblemWithDetails, Codelist } from '@/lib/types';
@@ -187,88 +187,127 @@ export default function CodelistDetailPage() {
       {/* Header */}
       <header className="border-b border-white/10 bg-black/20 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 py-6">
-          <button
+          <motion.button
+            whileHover={{ x: -3 }}
+            whileTap={{ scale: 0.95 }}
             onClick={() => router.push('/')}
             className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-4"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to CPulse
-          </button>
+          </motion.button>
           
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-4">
-              <div className="p-3 bg-cyan-500/20 rounded-lg">
+              <motion.div 
+                className="p-3 bg-cyan-500/20 rounded-lg"
+                whileHover={{ rotate: 5, scale: 1.05 }}
+                transition={{ duration: 0.2 }}
+              >
                 <List className="w-6 h-6 text-cyan-400" />
-              </div>
+              </motion.div>
               
-              {editing ? (
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="bg-zinc-900 border border-white/20 rounded px-3 py-2 text-xl font-bold text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
-                    autoFocus
-                  />
-                  <input
-                    type="text"
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    placeholder="Description (optional)"
-                    className="block bg-zinc-900 border border-white/20 rounded px-3 py-1.5 text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 w-80"
-                  />
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleUpdateCodelist}
-                      className="flex items-center gap-1 px-3 py-1 bg-cyan-500/20 text-cyan-400 rounded text-sm hover:bg-cyan-500/30"
+              <AnimatePresence mode="wait">
+                {editing ? (
+                  <motion.div 
+                    key="editing"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                    className="space-y-2"
+                  >
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      className="bg-zinc-900 border border-white/20 rounded px-3 py-2 text-xl font-bold text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+                      autoFocus
+                    />
+                    <input
+                      type="text"
+                      value={editDescription}
+                      onChange={(e) => setEditDescription(e.target.value)}
+                      placeholder="Description (optional)"
+                      className="block bg-zinc-900 border border-white/20 rounded px-3 py-1.5 text-sm text-zinc-300 focus:outline-none focus:ring-2 focus:ring-cyan-500/50 w-80"
+                    />
+                    <div className="flex items-center gap-2">
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={handleUpdateCodelist}
+                        className="flex items-center gap-1 px-3 py-1 bg-cyan-500/20 text-cyan-400 rounded text-sm hover:bg-cyan-500/30"
+                      >
+                        <Check className="w-4 h-4" />
+                        Save
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => {
+                          setEditing(false);
+                          setEditName(codelist.name);
+                          setEditDescription(codelist.description || '');
+                        }}
+                        className="flex items-center gap-1 px-3 py-1 bg-zinc-800 text-zinc-400 rounded text-sm hover:bg-zinc-700"
+                      >
+                        <X className="w-4 h-4" />
+                        Cancel
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="display"
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                  >
+                    <h1 className="text-2xl font-bold text-white">{codelist.name}</h1>
+                    {codelist.description && (
+                      <p className="text-zinc-400 mt-1">{codelist.description}</p>
+                    )}
+                    <motion.p 
+                      key={problems.length}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="text-sm text-zinc-500 mt-2"
                     >
-                      <Check className="w-4 h-4" />
-                      Save
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditing(false);
-                        setEditName(codelist.name);
-                        setEditDescription(codelist.description || '');
-                      }}
-                      className="flex items-center gap-1 px-3 py-1 bg-zinc-800 text-zinc-400 rounded text-sm hover:bg-zinc-700"
-                    >
-                      <X className="w-4 h-4" />
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <h1 className="text-2xl font-bold text-white">{codelist.name}</h1>
-                  {codelist.description && (
-                    <p className="text-zinc-400 mt-1">{codelist.description}</p>
-                  )}
-                  <p className="text-sm text-zinc-500 mt-2">
-                    {problems.length} problem{problems.length !== 1 ? 's' : ''}
-                  </p>
-                </div>
-              )}
+                      {problems.length} problem{problems.length !== 1 ? 's' : ''}
+                    </motion.p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
             
-            {!editing && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setEditing(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-zinc-800 text-zinc-300 rounded-lg hover:bg-zinc-700 transition-colors"
+            <AnimatePresence>
+              {!editing && (
+                <motion.div 
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20 }}
+                  className="flex items-center gap-2"
                 >
-                  <Edit2 className="w-4 h-4" />
-                  Edit
-                </button>
-                <button
-                  onClick={handleDeleteCodelist}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete
-                </button>
-              </div>
-            )}
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setEditing(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-zinc-800 text-zinc-300 rounded-lg hover:bg-zinc-700 transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                    Edit
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={handleDeleteCodelist}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </motion.button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </header>
@@ -293,33 +332,39 @@ export default function CodelistDetailPage() {
             </button>
           </motion.div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {problems.map((problem) => (
-              <ProblemCard
-                key={problem.id}
-                problem={problem}
-                onDelete={() => handleRemoveFromCodelist(problem.id)}
-                codelists={allCodelists}
-                onAddToCodelist={handleAddToCodelist}
-                onRemoveFromCodelist={(problemId, codelistId) => {
-                  if (codelistId === codelist.id) {
-                    handleRemoveFromCodelist(problemId);
-                  } else {
-                    // Remove from other codelist
-                    fetch(`/api/codelists/${codelistId}/problems?problemId=${problemId}`, {
-                      method: 'DELETE',
-                    }).then(() => {
-                      setAllCodelists(allCodelists.map(cl =>
-                        cl.id === codelistId
-                          ? { ...cl, problemIds: cl.problemIds.filter(id => id !== problemId) }
-                          : cl
-                      ));
-                    });
-                  }
-                }}
-              />
-            ))}
-          </div>
+          <motion.div 
+            layout
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            <AnimatePresence mode="popLayout">
+              {problems.map((problem, index) => (
+                <ProblemCard
+                  key={problem.id}
+                  problem={problem}
+                  onDelete={() => handleRemoveFromCodelist(problem.id)}
+                  codelists={allCodelists}
+                  onAddToCodelist={handleAddToCodelist}
+                  onRemoveFromCodelist={(problemId, codelistId) => {
+                    if (codelistId === codelist.id) {
+                      handleRemoveFromCodelist(problemId);
+                    } else {
+                      // Remove from other codelist
+                      fetch(`/api/codelists/${codelistId}/problems?problemId=${problemId}`, {
+                        method: 'DELETE',
+                      }).then(() => {
+                        setAllCodelists(allCodelists.map(cl =>
+                          cl.id === codelistId
+                            ? { ...cl, problemIds: cl.problemIds.filter(id => id !== problemId) }
+                            : cl
+                        ));
+                      });
+                    }
+                  }}
+                  index={index}
+                />
+              ))}
+            </AnimatePresence>
+          </motion.div>
         )}
       </main>
     </div>
