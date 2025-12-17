@@ -2,6 +2,125 @@ import { chromium } from 'playwright';
 import * as cheerio from 'cheerio';
 import { ProblemMetadata } from '../types';
 
+/**
+ * Clean up LaTeX/math expressions in text
+ * - Convert Codeforces-style $$$ to single $
+ * - Clean up MathJax artifacts
+ */
+function cleanLatexText(text: string): string {
+  // Convert $$$ inline math to $ (Codeforces style)
+  let result = text.replace(/\$\$\$([^$]+)\$\$\$/g, '$$$1$$');
+  
+  // Clean up any remaining MathJax artifacts
+  result = result.replace(/\s+/g, ' ').trim();
+  
+  return result;
+}
+
+/**
+ * Extract text from HTML while preserving spaces around inline elements
+ * Also handles KaTeX (used by AtCoder) by extracting LaTeX source
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractTextWithSpaces($: cheerio.CheerioAPI, element: any): string {
+  // Clone to avoid modifying original
+  const clone = element.clone();
+  
+  // Step 1: Handle KaTeX (AtCoder uses KaTeX, not MathJax)
+  // KaTeX stores original LaTeX in annotation element or in data attributes
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  clone.find('.katex').each((_: number, elem: any) => {
+    // Try to find the LaTeX source in annotation element
+    const annotation = $(elem).find('annotation[encoding="application/x-tex"]');
+    if (annotation.length > 0) {
+      const latex = annotation.text().trim();
+      // Always use single $ for inline - let the renderer decide display vs inline
+      // based on content complexity, not AtCoder's markup
+      $(elem).replaceWith(` $${latex}$ `);
+    } else {
+      // Fallback: try to get text content (will be the rendered math)
+      const text = $(elem).text().trim();
+      if (text) {
+        $(elem).replaceWith(` $${text}$ `);
+      } else {
+        $(elem).remove();
+      }
+    }
+  });
+  
+  // Also handle <var> tags which AtCoder sometimes uses for simple math
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  clone.find('var').each((_: number, elem: any) => {
+    const text = $(elem).text().trim();
+    if (text) {
+      $(elem).replaceWith(` $${text}$ `);
+    }
+  });
+  
+  // Step 2: Replace MathJax script tags with their LaTeX content wrapped in $
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  clone.find('script[type="math/tex"]').each((_: number, elem: any) => {
+    const latex = $(elem).text().trim();
+    const id = $(elem).attr('id') || '';
+    const isDisplay = id.includes('Display');
+    const replacement = isDisplay ? ` $$${latex}$$ ` : ` $${latex}$ `;
+    $(elem).replaceWith(replacement);
+  });
+  
+  // Step 3: Handle mjx-container (newer MathJax) - extract from aria-label or assistive text
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  clone.find('mjx-container').each((_: number, elem: any) => {
+    const ariaLabel = $(elem).attr('aria-label');
+    if (ariaLabel) {
+      $(elem).replaceWith(` $${ariaLabel}$ `);
+    } else {
+      const assistive = $(elem).find('.MJX_Assistive_MathML').text().trim();
+      if (assistive) {
+        $(elem).replaceWith(` $${assistive}$ `);
+      } else {
+        $(elem).remove();
+      }
+    }
+  });
+  
+  // Step 4: Remove any remaining MathJax visual rendering
+  clone.find('.MathJax, .MathJax_Display, .MathJax_Preview').remove();
+  clone.find('.MJX_Assistive_MathML').remove();
+  clone.find('[class*="Assistive"]').remove();
+  clone.find('nobr[aria-hidden="true"]').remove();
+  clone.find('span.math').remove();
+  
+  // Get HTML and process it
+  let html = clone.html() || '';
+  
+  // Add spaces around block-level elements to ensure proper text separation
+  html = html.replace(/<(p|div|br|li|ul|ol|h[1-6])[^>]*>/gi, ' ');
+  html = html.replace(/<\/(p|div|li|ul|ol|h[1-6])>/gi, ' ');
+  
+  // Add spaces around inline math and span elements to preserve word boundaries
+  html = html.replace(/<span[^>]*>/gi, ' ');
+  html = html.replace(/<\/span>/gi, ' ');
+  
+  // Convert HTML entities
+  html = html.replace(/&nbsp;/g, ' ');
+  html = html.replace(/&lt;/g, '<');
+  html = html.replace(/&gt;/g, '>');
+  html = html.replace(/&amp;/g, '&');
+  html = html.replace(/&quot;/g, '"');
+  
+  // Remove all remaining HTML tags
+  html = html.replace(/<[^>]+>/g, ' ');
+  
+  // Apply LaTeX cleanup
+  html = cleanLatexText(html);
+  
+  // Clean up multiple spaces but preserve single spaces
+  html = html.replace(/\s+/g, ' ').trim();
+  
+  return html;
+}
+
 export async function parseAtcoder(url: string): Promise<ProblemMetadata> {
   // Extract problem ID from URL first (needed for proper identification)
   // AtCoder URL formats:
@@ -114,15 +233,69 @@ export async function parseAtcoder(url: string): Promise<ProblemMetadata> {
     const taskStatement = $('#task-statement');
     if (taskStatement.length > 0) {
       // Find English version
-      const englishSection = taskStatement.find('.lang-en, span.lang-en');
+      let englishSection = taskStatement.find('.lang-en, span.lang-en');
       if (englishSection.length > 0) {
-        description = englishSection.first().html() || '';
+        // Clone the section to avoid modifying the original
+        const clonedSection = englishSection.first().clone();
+        
+        // Remove elements we don't want in the problem statement
+        // 1. Remove all copy buttons
+        clonedSection.find('.btn-copy, .btn, [class*="copy"], button').remove();
+        
+        // 2. Remove sample test sections (Sample Input/Output sections)
+        clonedSection.find('section, div').each((_, elem) => {
+          const sectionText = $(elem).text().toLowerCase();
+          if (sectionText.includes('sample input') || 
+              sectionText.includes('sample output') ||
+              sectionText.includes('入力例') ||
+              sectionText.includes('出力例')) {
+            $(elem).remove();
+          }
+        });
+        
+        // 3. Remove "Score" section if present
+        clonedSection.find('p, div').each((_, elem) => {
+          const text = $(elem).text().trim();
+          if (/^Score\s*:\s*\d+/i.test(text) || /^配点\s*:\s*\d+/i.test(text)) {
+            $(elem).remove();
+          }
+        });
+        
+        // 4. Remove the "Problem Statement" header itself since we'll have our own
+        clonedSection.find('h3, h2').each((_, elem) => {
+          const text = $(elem).text().trim().toLowerCase();
+          if (text === 'problem statement' || text === '問題文') {
+            $(elem).remove();
+          }
+        });
+        
+        description = clonedSection.html() || '';
       } else {
         // If no English section, get the first visible lang section
         const langSections = taskStatement.find('span.lang > span');
         langSections.each((_, elem) => {
-          const html = $(elem).html() || '';
-          const text = $(elem).text() || '';
+          const clonedElem = $(elem).clone();
+          
+          // Remove unwanted elements
+          clonedElem.find('.btn-copy, .btn, [class*="copy"], button').remove();
+          clonedElem.find('section, div').each((_, section) => {
+            const sectionText = $(section).text().toLowerCase();
+            if (sectionText.includes('sample input') || 
+                sectionText.includes('sample output') ||
+                sectionText.includes('入力例') ||
+                sectionText.includes('出力例')) {
+              $(section).remove();
+            }
+          });
+          clonedElem.find('p, div').each((_, p) => {
+            const text = $(p).text().trim();
+            if (/^Score\s*:\s*\d+/i.test(text) || /^配点\s*:\s*\d+/i.test(text)) {
+              $(p).remove();
+            }
+          });
+          
+          const html = clonedElem.html() || '';
+          const text = clonedElem.text() || '';
           // Check if it's English (no Japanese characters)
           const hasJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(text);
           if (html.length > description.length && !hasJapanese) {
@@ -135,7 +308,15 @@ export async function parseAtcoder(url: string): Promise<ProblemMetadata> {
     // If still no description, try other selectors
     if (!description) {
       $('.lang-en').each((_, elem) => {
-        const html = $(elem).html() || '';
+        const clonedElem = $(elem).clone();
+        clonedElem.find('.btn-copy, .btn, [class*="copy"], button').remove();
+        clonedElem.find('section, div').each((_, section) => {
+          const sectionText = $(section).text().toLowerCase();
+          if (sectionText.includes('sample input') || sectionText.includes('sample output')) {
+            $(section).remove();
+          }
+        });
+        const html = clonedElem.html() || '';
         if (html.length > description.length) {
           description = html;
         }
@@ -144,7 +325,9 @@ export async function parseAtcoder(url: string): Promise<ProblemMetadata> {
     
     if (!description) {
       $('.part, [class*="problem"], [class*="statement"]').each((_, elem) => {
-        const html = $(elem).html() || '';
+        const clonedElem = $(elem).clone();
+        clonedElem.find('.btn-copy, .btn, [class*="copy"], button').remove();
+        const html = clonedElem.html() || '';
         if (html.length > description.length) {
           description = html;
         }
@@ -153,157 +336,124 @@ export async function parseAtcoder(url: string): Promise<ProblemMetadata> {
     
     // Fallback to main content
     if (!description) {
-      description = $('main, .container, #main-container').html() || '';
+      const mainContent = $('main, .container, #main-container').clone();
+      mainContent.find('.btn-copy, .btn, [class*="copy"], button').remove();
+      description = mainContent.html() || '';
     }
     
+    // Clean up description - remove "Copy" text that may remain
+    description = description
+      .replace(/Copy\s*Copy/gi, '')
+      .replace(/>Copy</gi, '><')
+      .replace(/\bCopy\b(?=\s*<)/gi, '')
+      .trim();
+    
     // Extract sample tests - look for input/output sections in English
-    const sampleTests: Array<{ input: string; output: string }> = [];
+    const sampleTests: Array<{ input: string; output: string; explanation?: string }> = [];
     
-    // Method 1: Look for pre tags with IDs like pre-sample0, pre-sample1, etc. (actual test data)
-    // These are the actual sample test cases, not copy buttons
-    const samplePreTags = $('pre[id^="pre-sample"]').not('.btn-copy, .btn, [class*="copy"]');
+    // Method 1: Look for sample input/output sections with their explanations
+    // AtCoder structure: sections with h3 headers "Sample Input X", "Sample Output X"
+    // Explanations typically follow the output section or are in a separate section
+    const englishContent = $('.lang-en, span.lang-en').first();
+    const allSections = englishContent.find('section');
     
-    // Group them into pairs (input/output)
-    for (let i = 0; i < samplePreTags.length - 1; i += 2) {
-      const inputPre = samplePreTags.eq(i);
-      const outputPre = samplePreTags.eq(i + 1);
+    // Collect all sample inputs, outputs, and explanations
+    const sampleData: { [key: number]: { input?: string; output?: string; explanation?: string } } = {};
+    
+    allSections.each((_, section) => {
+      const header = $(section).find('h3').first().text().trim();
+      const headerLower = header.toLowerCase();
       
-      const inputText = inputPre.text().trim();
-      const outputText = outputPre.text().trim();
+      // Match "Sample Input 1", "Sample Output 2", etc.
+      const inputMatch = headerLower.match(/sample\s*input\s*(\d+)/);
+      const outputMatch = headerLower.match(/sample\s*output\s*(\d+)/);
       
-      // Verify these are actual test cases (not copy buttons)
-      if (inputText && outputText && 
-          !inputText.toLowerCase().includes('copy') && 
-          !outputText.toLowerCase().includes('copy') &&
-          inputText.length > 0 && outputText.length > 0) {
+      if (inputMatch) {
+        const num = parseInt(inputMatch[1]);
+        const pre = $(section).find('pre[id^="pre-sample"]').first();
+        if (pre.length > 0) {
+          let text = pre.text().trim();
+          text = text.replace(/^Copy\s*/i, '').replace(/\s*Copy$/i, '').trim();
+          if (!sampleData[num]) sampleData[num] = {};
+          sampleData[num].input = text;
+        }
+      } else if (outputMatch) {
+        const num = parseInt(outputMatch[1]);
+        const pre = $(section).find('pre[id^="pre-sample"]').first();
+        if (pre.length > 0) {
+          let text = pre.text().trim();
+          text = text.replace(/^Copy\s*/i, '').replace(/\s*Copy$/i, '').trim();
+          if (!sampleData[num]) sampleData[num] = {};
+          sampleData[num].output = text;
+          
+          // Look for explanation - it's usually the text after the pre tag
+          // or in paragraphs within the same section
+          const sectionClone = $(section).clone();
+          sectionClone.find('h3, pre, .btn-copy, .btn, button').remove();
+          let explanationText = extractTextWithSpaces($, sectionClone);
+          
+          if (explanationText && explanationText.length > 5) {
+            sampleData[num].explanation = explanationText;
+          }
+        }
+      }
+    });
+    
+    // Also look for dedicated explanation sections (common in some AtCoder problems)
+    allSections.each((_, section) => {
+      const sectionText = $(section).text();
+      
+      // Look for patterns like "When (i,j)=(1,1)" or explanation patterns
+      Object.keys(sampleData).forEach(numStr => {
+        const num = parseInt(numStr);
+        if (!sampleData[num].explanation) {
+          // Check if this section contains explanation for this sample
+          const header = $(section).find('h3').first().text().trim().toLowerCase();
+          if (header.includes(`sample ${num}`) && !header.includes('input') && !header.includes('output')) {
+            const sectionClone = $(section).clone();
+            sectionClone.find('h3, .btn-copy, .btn, button').remove();
+            let text = extractTextWithSpaces($, sectionClone);
+            if (text && text.length > 5) {
+              sampleData[num].explanation = text;
+            }
+          }
+        }
+      });
+    });
+    
+    // Convert to array
+    const sortedNums = Object.keys(sampleData).map(n => parseInt(n)).sort((a, b) => a - b);
+    for (const num of sortedNums) {
+      const data = sampleData[num];
+      if (data.input && data.output) {
         sampleTests.push({
-          input: inputText,
-          output: outputText,
+          input: data.input,
+          output: data.output,
+          explanation: data.explanation,
         });
       }
     }
     
-    // Method 2: Look for sections with "Sample Input" and "Sample Output" in English
+    // Fallback Method: Look for pre tags with IDs if structured method didn't work
     if (sampleTests.length === 0) {
-      const englishSections = $('.lang-en section, .lang-en div, span.lang-en section, span.lang-en div');
-      englishSections.each((_, section) => {
-        const sectionText = $(section).text().toLowerCase();
-        if (sectionText.includes('sample input') || sectionText.includes('sample output')) {
-          // Find pre tags, but exclude those inside copy buttons or button elements
-          const preTags = $(section).find('pre')
-            .not('.btn-copy, .btn, [class*="copy"]')
-            .filter((_, el) => {
-              // Exclude if parent is a button or has copy-related classes
-              const parent = $(el).parent();
-              return !parent.hasClass('btn-copy') && 
-                     !parent.hasClass('btn') && 
-                     !parent.hasClass('btn-copy') &&
-                     parent[0]?.tagName !== 'BUTTON';
-            });
-          
-          if (preTags.length >= 2) {
-            // Usually first is input, second is output
-            const inputText = preTags.eq(0).text().trim();
-            const outputText = preTags.eq(1).text().trim();
-            // Filter out "Copy" button text and verify it's actual test data
-            if (inputText && !inputText.toLowerCase().includes('copy') && 
-                outputText && !outputText.toLowerCase().includes('copy') &&
-                inputText.length > 2 && outputText.length > 2) {
-              sampleTests.push({
-                input: inputText,
-                output: outputText,
-              });
-            }
-          }
-        }
-      });
-    }
-    
-    // Method 2: Look for adjacent pre tags with labels in English sections
-    if (sampleTests.length === 0) {
-      $('.lang-en pre, span.lang-en pre').not('.btn-copy, .btn, [class*="copy"]').each((_, elem) => {
-        const text = $(elem).text().trim();
-        // Skip if it's a copy button or contains "Copy" text
-        if (text && text.length > 0 && !text.toLowerCase().includes('copy')) {
-          const prevText = $(elem).prev().text().toLowerCase();
-          const parentText = $(elem).parent().text().toLowerCase();
-          
-          // Skip if previous element is a copy button
-          if ($(elem).prev().hasClass('btn-copy') || $(elem).prev().hasClass('btn') || 
-              $(elem).prev('[class*="copy"]').length > 0) {
-            return;
-          }
-          
-          if ((prevText.includes('input') || prevText.includes('sample') || 
-               parentText.includes('input') || parentText.includes('sample')) && 
-              !prevText.includes('output') && !prevText.includes('copy')) {
-            const nextPre = $(elem).nextAll('pre').not('.btn-copy, .btn, [class*="copy"]').first();
-            if (nextPre.length) {
-              const nextText = nextPre.prev().text().toLowerCase();
-              const nextPreText = nextPre.text().trim();
-              if ((nextText.includes('output') || nextText.includes('sample')) && 
-                  !nextText.includes('copy') && 
-                  !nextPreText.toLowerCase().includes('copy')) {
-                sampleTests.push({
-                  input: text,
-                  output: nextPreText,
-                });
-              }
-            }
-          }
-        }
-      });
-    }
-    
-    // Method 3: Look for all pre tags and match input/output pairs (excluding copy buttons)
-    if (sampleTests.length === 0) {
-      const allPre = $('pre').not('.btn-copy, .btn, [class*="copy"]');
-      for (let i = 0; i < allPre.length - 1; i++) {
-        const currentPre = allPre.eq(i);
-        const nextPre = allPre.eq(i + 1);
-        const currentText = currentPre.text().trim();
-        const nextText = nextPre.text().trim();
+      const samplePreTags = $('pre[id^="pre-sample"]');
+      
+      // Group them into pairs (input/output)
+      for (let i = 0; i < samplePreTags.length - 1; i += 2) {
+        const inputPre = samplePreTags.eq(i);
+        const outputPre = samplePreTags.eq(i + 1);
         
-        // Skip if text contains "Copy" or is too short (likely a button)
-        if (currentText.toLowerCase().includes('copy') || 
-            nextText.toLowerCase().includes('copy') ||
-            currentText.length < 3 || nextText.length < 3) {
-          continue;
-        }
+        let inputText = inputPre.text().trim();
+        let outputText = outputPre.text().trim();
         
-        // Check if they're in an English section
-        const currentParent = currentPre.parent();
-        const parentText = currentParent.text().toLowerCase();
-        const hasJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/.test(parentText);
+        inputText = inputText.replace(/^Copy\s*/i, '').replace(/\s*Copy$/i, '').trim();
+        outputText = outputText.replace(/^Copy\s*/i, '').replace(/\s*Copy$/i, '').trim();
         
-        // Skip if parent is a copy button
-        if (currentParent.hasClass('btn-copy') || currentParent.hasClass('btn') || 
-            currentParent[0]?.tagName === 'BUTTON') {
-          continue;
-        }
-        
-        if (currentText && nextText && !hasJapanese) {
-          // Check if previous element suggests this is input (but not a copy button)
-          const prevElement = currentPre.prev();
-          if (prevElement.hasClass('btn-copy') || prevElement.hasClass('btn') || 
-              prevElement[0]?.tagName === 'BUTTON') {
-            continue;
-          }
-          
-          const prevText = prevElement.text().toLowerCase();
-          if ((prevText.includes('input') || prevText.includes('sample')) && 
-              !prevText.includes('copy')) {
-            const nextPrevElement = nextPre.prev();
-            const nextPrevText = nextPrevElement.text().toLowerCase();
-            if ((nextPrevText.includes('output') || nextPrevText.includes('sample')) && 
-                !nextPrevText.includes('copy')) {
-              sampleTests.push({
-                input: currentText,
-                output: nextText,
-              });
-              i++; // Skip next as we used it
-            }
-          }
+        if (inputText && outputText && inputText.length > 0 && outputText.length > 0) {
+          sampleTests.push({
+            input: inputText,
+            output: outputText,
+          });
         }
       }
     }
