@@ -1,12 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCodelists, saveCodelist, deleteCodelist } from '@/lib/db';
+import { getAuthenticatedUser } from '@/lib/supabase/db';
+import * as supabaseDb from '@/lib/supabase/db';
+import * as localDb from '@/lib/db';
 import { Codelist } from '@/lib/types';
 import { randomUUID } from 'crypto';
+
+// Check if Supabase is configured
+const useSupabase = () => {
+  return !!(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+};
 
 // GET /api/codelists - Get all codelists
 export async function GET() {
   try {
-    const codelists = await getCodelists();
+    if (useSupabase()) {
+      const user = await getAuthenticatedUser();
+      if (!user) {
+        return NextResponse.json({ success: true, data: [] });
+      }
+      
+      const codelists = await supabaseDb.getCodelists(user.id);
+      return NextResponse.json({ success: true, data: codelists });
+    }
+    
+    const codelists = await localDb.getCodelists();
     return NextResponse.json({ success: true, data: codelists });
   } catch (error) {
     console.error('Error fetching codelists:', error);
@@ -30,6 +50,25 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    if (useSupabase()) {
+      const user = await getAuthenticatedUser();
+      if (!user) {
+        return NextResponse.json(
+          { success: false, error: 'Authentication required' },
+          { status: 401 }
+        );
+      }
+      
+      const codelist = await supabaseDb.saveCodelist(user.id, {
+        id: randomUUID(),
+        name: name.trim(),
+        description: description?.trim() || undefined,
+        problemIds: [],
+      });
+      
+      return NextResponse.json({ success: true, data: codelist });
+    }
+    
     const now = new Date().toISOString();
     const codelist: Codelist = {
       id: randomUUID(),
@@ -40,7 +79,7 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     };
     
-    await saveCodelist(codelist);
+    await localDb.saveCodelist(codelist);
     
     return NextResponse.json({ success: true, data: codelist });
   } catch (error) {
