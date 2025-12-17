@@ -10,11 +10,13 @@ import { ProblemWithDetails, Codelist, Platform, PLATFORMS } from '@/lib/types';
 import { Activity, Sparkles, Filter, List, Plus, X, ChevronDown, Search, LayoutGrid, LayoutList, Share2, Copy, Check, LogIn, LogOut, User } from 'lucide-react';
 import { useAuth } from './providers';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 type SolvedFilter = 'all' | 'solved' | 'unsolved';
 type ViewMode = 'grid' | 'list';
 
 export default function Home() {
+  const router = useRouter();
   const { user, loading: authLoading, signOut } = useAuth();
   const [problems, setProblems] = useState<ProblemWithDetails[]>([]);
   const [codelists, setCodelists] = useState<(Codelist & { isPublic?: boolean })[]>([]);
@@ -39,6 +41,13 @@ export default function Home() {
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [copiedShare, setCopiedShare] = useState(false);
   
+  // Redirect to landing page if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/landing');
+    }
+  }, [authLoading, user, router]);
+
   const fetchProblems = async () => {
     try {
       const response = await fetch('/api/problems');
@@ -265,6 +274,18 @@ export default function Home() {
     setCodelistFilter('all');
   };
   
+  // Show loading while checking auth or redirecting
+  if (authLoading || !user) {
+    return (
+      <div className="min-h-screen bg-[#09090b] flex items-center justify-center">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <Activity className="w-12 h-12 text-cyan-400" />
+          <p className="text-zinc-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-black to-zinc-900">
       {/* Share Modal */}
@@ -366,73 +387,6 @@ export default function Home() {
       </header>
       
       <main className="max-w-7xl mx-auto px-6 py-12">
-        {/* Show login prompt if not authenticated */}
-        {!authLoading && !user ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-center py-20"
-          >
-            <div className="w-20 h-20 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <LogIn className="w-10 h-10 text-cyan-400" />
-            </div>
-            <h2 className="text-3xl font-bold text-white mb-4">
-              Sign in to get started
-            </h2>
-            <p className="text-zinc-400 text-lg max-w-md mx-auto mb-6">
-              Track your competitive programming journey by archiving problems from all major platforms.
-            </p>
-            
-            {/* Platform logos */}
-            <div className="flex items-center justify-center gap-6 mb-8">
-              <motion.div 
-                className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-xl"
-                whileHover={{ scale: 1.05, y: -2 }}
-              >
-                <CodeforcesLogo className="w-5 h-5 text-blue-400" />
-                <span className="text-blue-400 font-medium text-sm">Codeforces</span>
-              </motion.div>
-              <motion.div 
-                className="flex items-center gap-2 px-4 py-2 bg-orange-500/10 border border-orange-500/30 rounded-xl"
-                whileHover={{ scale: 1.05, y: -2 }}
-              >
-                <LeetCodeLogo className="w-5 h-5 text-orange-400" />
-                <span className="text-orange-400 font-medium text-sm">LeetCode</span>
-              </motion.div>
-              <motion.div 
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl"
-                whileHover={{ scale: 1.05, y: -2 }}
-              >
-                <AtCoderLogo className="w-5 h-5 text-emerald-400" />
-                <span className="text-emerald-400 font-medium text-sm">AtCoder</span>
-              </motion.div>
-              <motion.div 
-                className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-xl"
-                whileHover={{ scale: 1.05, y: -2 }}
-              >
-                <CodeChefLogo className="w-5 h-5 text-amber-400" />
-                <span className="text-amber-400 font-medium text-sm">CodeChef</span>
-              </motion.div>
-            </div>
-            
-            <div className="flex items-center justify-center gap-4">
-              <Link
-                href="/login"
-                className="flex items-center gap-2 px-6 py-3 bg-cyan-500 hover:bg-cyan-400 text-black font-semibold rounded-xl transition-colors"
-              >
-                <LogIn className="w-5 h-5" />
-                Sign In
-              </Link>
-              <Link
-                href="/landing"
-                className="flex items-center gap-2 px-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold rounded-xl transition-colors"
-              >
-                Learn More
-              </Link>
-            </div>
-          </motion.div>
-        ) : (
-          <>
         {/* Hero Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -850,8 +804,6 @@ export default function Home() {
           </motion.div>
         )}
         </AnimatePresence>
-        </>
-        )}
       </main>
     </div>
   );
