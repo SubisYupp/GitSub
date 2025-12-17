@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseProblem } from '@/lib/parsers';
-import { getProblemByUrl, getProblemById, saveProblem } from '@/lib/db';
+import { getAuthenticatedUser } from '@/lib/supabase/db';
+import * as supabaseDb from '@/lib/supabase/db';
+import * as localDb from '@/lib/db';
+
+// Check if Supabase is configured
+const useSupabase = () => {
+  return !!(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,8 +23,55 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Check if problem already exists by URL (handles normalization automatically)
-    const existingByUrl = await getProblemByUrl(url);
+    if (useSupabase()) {
+      const user = await getAuthenticatedUser();
+      if (!user) {
+        return NextResponse.json(
+          { success: false, error: 'Authentication required' },
+          { status: 401 }
+        );
+      }
+      
+      // Check if problem already exists globally
+      const existingByUrl = await supabaseDb.getProblemByUrl(url);
+      if (existingByUrl) {
+        // Add to user's problems
+        await supabaseDb.addProblemToUser(user.id, existingByUrl.id);
+        return NextResponse.json({
+          success: true,
+          data: existingByUrl,
+          message: 'Problem added to your vault',
+        });
+      }
+      
+      // Parse the problem
+      console.log(`Parsing problem from URL: ${url}`);
+      const problem = await parseProblem(url);
+      console.log(`Successfully parsed problem: ${problem.title}`);
+      
+      // Check by ID
+      const existingById = await supabaseDb.getProblemById(problem.id);
+      if (existingById) {
+        await supabaseDb.addProblemToUser(user.id, existingById.id);
+        return NextResponse.json({
+          success: true,
+          data: existingById,
+          message: 'Problem added to your vault',
+        });
+      }
+      
+      // Save globally and add to user
+      const savedProblem = await supabaseDb.saveProblem(problem);
+      await supabaseDb.addProblemToUser(user.id, savedProblem.id);
+      
+      return NextResponse.json({
+        success: true,
+        data: savedProblem,
+      });
+    }
+    
+    // Fallback to local
+    const existingByUrl = await localDb.getProblemByUrl(url);
     if (existingByUrl) {
       return NextResponse.json({
         success: true,
@@ -29,7 +86,7 @@ export async function POST(request: NextRequest) {
     console.log(`Successfully parsed problem: ${problem.title}`);
     
     // Also check by problem ID (in case URL format differs but same problem)
-    const existingById = await getProblemById(problem.id);
+    const existingById = await localDb.getProblemById(problem.id);
     if (existingById) {
       return NextResponse.json({
         success: true,
@@ -39,7 +96,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Save to database
-    await saveProblem(problem);
+    await localDb.saveProblem(problem);
     
     return NextResponse.json({
       success: true,
