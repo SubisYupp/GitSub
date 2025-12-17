@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCodelistById, saveCodelist, deleteCodelist } from '@/lib/db';
+import { getAuthenticatedUser } from '@/lib/supabase/db';
+import * as supabaseDb from '@/lib/supabase/db';
+import * as localDb from '@/lib/db';
+
+// Check if Supabase is configured
+const useSupabase = () => {
+  return !!(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+};
 
 // GET /api/codelists/[id] - Get a specific codelist
 export async function GET(
@@ -8,7 +18,22 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const codelist = await getCodelistById(id);
+    
+    if (useSupabase()) {
+      const user = await getAuthenticatedUser();
+      const codelist = await supabaseDb.getCodelistById(id, user?.id);
+      
+      if (!codelist) {
+        return NextResponse.json(
+          { success: false, error: 'Codelist not found' },
+          { status: 404 }
+        );
+      }
+      
+      return NextResponse.json({ success: true, data: codelist });
+    }
+    
+    const codelist = await localDb.getCodelistById(id);
     
     if (!codelist) {
       return NextResponse.json(
@@ -27,14 +52,56 @@ export async function GET(
   }
 }
 
-// PATCH /api/codelists/[id] - Update a codelist (name/description)
+// PATCH /api/codelists/[id] - Update a codelist (name/description/isPublic)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    const codelist = await getCodelistById(id);
+    const body = await request.json();
+    const { name, description, isPublic } = body;
+    
+    if (useSupabase()) {
+      const user = await getAuthenticatedUser();
+      if (!user) {
+        return NextResponse.json(
+          { success: false, error: 'Authentication required' },
+          { status: 401 }
+        );
+      }
+      
+      const codelist = await supabaseDb.getCodelistById(id, user.id);
+      
+      if (!codelist) {
+        return NextResponse.json(
+          { success: false, error: 'Codelist not found' },
+          { status: 404 }
+        );
+      }
+      
+      // Handle public toggle separately
+      if (isPublic !== undefined) {
+        await supabaseDb.toggleCodelistPublic(user.id, id, isPublic);
+      }
+      
+      // Update name/description
+      if (name !== undefined || description !== undefined) {
+        const updatedCodelist = {
+          ...codelist,
+          name: name !== undefined ? name.trim() : codelist.name,
+          description: description !== undefined ? description?.trim() : codelist.description,
+        };
+        
+        await supabaseDb.saveCodelist(user.id, updatedCodelist);
+      }
+      
+      const updated = await supabaseDb.getCodelistById(id, user.id);
+      return NextResponse.json({ success: true, data: updated });
+    }
+    
+    // Local fallback
+    const codelist = await localDb.getCodelistById(id);
     
     if (!codelist) {
       return NextResponse.json(
@@ -42,9 +109,6 @@ export async function PATCH(
         { status: 404 }
       );
     }
-    
-    const body = await request.json();
-    const { name, description } = body;
     
     if (name !== undefined) {
       if (typeof name !== 'string' || name.trim().length === 0) {
@@ -60,7 +124,7 @@ export async function PATCH(
       codelist.description = description?.trim() || undefined;
     }
     
-    await saveCodelist(codelist);
+    await localDb.saveCodelist(codelist);
     
     return NextResponse.json({ success: true, data: codelist });
   } catch (error) {
@@ -79,7 +143,21 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const codelist = await getCodelistById(id);
+    
+    if (useSupabase()) {
+      const user = await getAuthenticatedUser();
+      if (!user) {
+        return NextResponse.json(
+          { success: false, error: 'Authentication required' },
+          { status: 401 }
+        );
+      }
+      
+      await supabaseDb.deleteCodelist(user.id, id);
+      return NextResponse.json({ success: true });
+    }
+    
+    const codelist = await localDb.getCodelistById(id);
     
     if (!codelist) {
       return NextResponse.json(
@@ -88,7 +166,7 @@ export async function DELETE(
       );
     }
     
-    await deleteCodelist(id);
+    await localDb.deleteCodelist(id);
     
     return NextResponse.json({ success: true });
   } catch (error) {
