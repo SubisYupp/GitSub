@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { ArrowLeft, List, Trash2, Edit2, Check, X } from 'lucide-react';
+import { ArrowLeft, List, Trash2, Edit2, Check, X, Activity } from 'lucide-react';
 import ProblemCard from '@/app/components/ProblemCard';
 import { ProblemWithDetails, Codelist } from '@/lib/types';
 
@@ -192,7 +192,7 @@ export default function CodelistDetailPage() {
             className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-4"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Vault
+            Back to CPulse
           </button>
           
           <div className="flex items-start justify-between">
