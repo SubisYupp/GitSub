@@ -11,6 +11,7 @@ export interface SampleTest {
   input: string;
   output: string;
   explanation?: string;
+  images?: string[]; // URLs of images in the explanation
 }
 
 export interface ProblemMetadata {
