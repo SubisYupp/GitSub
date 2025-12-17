@@ -9,10 +9,17 @@ export async function getAuthenticatedUser() {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
   
-  if (error || !user) {
+  if (error) {
+    console.log('Auth error:', error.message);
     return null;
   }
   
+  if (!user) {
+    console.log('No user found in session');
+    return null;
+  }
+  
+  console.log('Authenticated user:', user.id);
   return user;
 }
 

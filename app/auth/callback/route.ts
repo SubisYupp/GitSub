@@ -1,4 +1,5 @@
-import { createClient } from '@/lib/supabase/server';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request) {
@@ -10,11 +11,32 @@ export async function GET(request: Request) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') || new URL(request.url).origin;
 
   if (code) {
-    const supabase = await createClient();
+    const cookieStore = await cookies();
+    
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value;
+          },
+          set(name: string, value: string, options: CookieOptions) {
+            cookieStore.set({ name, value, ...options });
+          },
+          remove(name: string, options: CookieOptions) {
+            cookieStore.delete(name);
+          },
+        },
+      }
+    );
+    
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     
     if (!error) {
-      return NextResponse.redirect(`${baseUrl}${next}`);
+      // Force a redirect that will carry the new cookies
+      const response = NextResponse.redirect(`${baseUrl}${next}`);
+      return response;
     }
     
     // Log error for debugging (check Vercel logs)
