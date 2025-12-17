@@ -18,7 +18,7 @@ import {
   BarChart3,
   Layers
 } from 'lucide-react';
-import { CodeforcesLogo, LeetCodeLogo, AtCoderLogo, CodeChefLogo, getPlatformLogo } from '@/app/components/PlatformLogos';
+import { PlatformLogoImage } from '@/app/components/PlatformLogos';
 
 // Seeded random number generator for consistent SSR/client values
 function seededRandom(seed: number) {
@@ -213,44 +213,107 @@ function FloatingCode() {
   );
 }
 
-// Animated counter for stats
-function AnimatedCounter({ value, suffix = '', label }: { value: number; suffix?: string; label: string }) {
-  const [count, setCount] = useState(0);
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true });
+// Animated border box with running light effect
+function AnimatedBorderBox({ children, color, bgColor }: { 
+  children: React.ReactNode; 
+  color: string;
+  bgColor: string;
+}) {
+  return (
+    <motion.div
+      className="relative w-full max-w-[260px] h-28 sm:h-32 rounded-2xl p-[4px] overflow-hidden"
+      whileHover={{ y: -4, scale: 1.02 }}
+      transition={{ duration: 0.2 }}
+    >
+      {/* Static border base - always visible */}
+      <div 
+        className="absolute inset-0 rounded-2xl"
+        style={{ backgroundColor: color }}
+      />
+      {/* Animated rotating gradient border - bright glow effect */}
+      <div 
+        className="absolute inset-[-2px] rounded-2xl"
+        style={{
+          background: `conic-gradient(from 0deg, ${color}, #fff 30deg, transparent 60deg, transparent 300deg, #fff 330deg, ${color})`,
+          animation: 'spin 3s linear infinite',
+        }}
+      />
+      {/* Inner content */}
+      <div 
+        className="relative w-full h-full rounded-[12px] flex items-center justify-center px-4"
+        style={{ backgroundColor: bgColor }}
+      >
+        {children}
+      </div>
+      <style jsx>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </motion.div>
+  );
+}
+
+// Motivational quote component
+function MotivationalQuote() {
+  const [quote, setQuote] = useState({ content: '', author: '' });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (isInView) {
-      const duration = 2000;
-      const steps = 60;
-      const increment = value / steps;
-      let current = 0;
-      const timer = setInterval(() => {
-        current += increment;
-        if (current >= value) {
-          setCount(value);
-          clearInterval(timer);
+    const fetchQuote = async () => {
+      try {
+        const response = await fetch('https://api.quotable.io/random?tags=inspirational|motivational|success');
+        if (response.ok) {
+          const data = await response.json();
+          setQuote({ content: data.content, author: data.author });
         } else {
-          setCount(Math.floor(current));
+          // Fallback quotes if API fails
+          const fallbackQuotes = [
+            { content: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
+            { content: "Success is not final, failure is not fatal: it is the courage to continue that counts.", author: "Winston Churchill" },
+            { content: "The future belongs to those who believe in the beauty of their dreams.", author: "Eleanor Roosevelt" },
+            { content: "It does not matter how slowly you go as long as you do not stop.", author: "Confucius" },
+          ];
+          setQuote(fallbackQuotes[Math.floor(Math.random() * fallbackQuotes.length)]);
         }
-      }, duration / steps);
-      return () => clearInterval(timer);
-    }
-  }, [isInView, value]);
+      } catch {
+        const fallbackQuotes = [
+          { content: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
+          { content: "Success is not final, failure is not fatal: it is the courage to continue that counts.", author: "Winston Churchill" },
+          { content: "The future belongs to those who believe in the beauty of their dreams.", author: "Eleanor Roosevelt" },
+          { content: "It does not matter how slowly you go as long as you do not stop.", author: "Confucius" },
+        ];
+        setQuote(fallbackQuotes[Math.floor(Math.random() * fallbackQuotes.length)]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQuote();
+  }, []);
 
   return (
     <motion.div
-      ref={ref}
-      className="text-center"
-      initial={{ opacity: 0, y: 30 }}
+      className="text-center max-w-3xl mx-auto"
+      initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.6 }}
     >
-      <div className="text-4xl md:text-5xl font-bold text-white mb-2">
-        {count.toLocaleString()}{suffix}
-      </div>
-      <div className="text-zinc-400">{label}</div>
+      {loading ? (
+        <div className="animate-pulse">
+          <div className="h-6 bg-zinc-800 rounded w-3/4 mx-auto mb-4"></div>
+          <div className="h-4 bg-zinc-800 rounded w-1/4 mx-auto"></div>
+        </div>
+      ) : (
+        <>
+          <div className="text-2xl md:text-3xl font-medium text-white mb-4 leading-relaxed italic">
+            "{quote.content}"
+          </div>
+          <div className="text-cyan-400 font-medium">— {quote.author}</div>
+        </>
+      )}
     </motion.div>
   );
 }
@@ -290,24 +353,7 @@ function FeatureCard({ icon: Icon, title, description, delay, gradient }: {
   );
 }
 
-// Platform badge component
-function PlatformBadge({ name, color, delay }: { name: string; color: string; delay: number }) {
-  const Logo = getPlatformLogo(name);
-  
-  return (
-    <motion.div
-      className={`flex items-center gap-3 px-6 py-3 rounded-xl border ${color} bg-zinc-900/50 backdrop-blur-sm`}
-      initial={{ opacity: 0, scale: 0.8 }}
-      whileInView={{ opacity: 1, scale: 1 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.4, delay }}
-      whileHover={{ scale: 1.05, y: -2 }}
-    >
-      {Logo && <Logo className="w-6 h-6" />}
-      <span className="font-semibold">{name}</span>
-    </motion.div>
-  );
-}
+//
 
 // Main landing page component
 export default function LandingPage() {
@@ -470,23 +516,44 @@ export default function LandingPage() {
             viewport={{ once: true }}
           >
             <p className="text-zinc-400 mb-8 text-lg">Supports all major competitive programming platforms</p>
-            <div className="flex flex-wrap items-center justify-center gap-4">
-              <PlatformBadge name="Codeforces" color="border-blue-500/40 text-blue-400" delay={0} />
-              <PlatformBadge name="LeetCode" color="border-orange-500/40 text-orange-400" delay={0.1} />
-              <PlatformBadge name="AtCoder" color="border-emerald-500/40 text-emerald-400" delay={0.2} />
-              <PlatformBadge name="CodeChef" color="border-amber-500/40 text-amber-400" delay={0.3} />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 md:gap-6 items-center justify-items-center">
+              {/* Codeforces */}
+              <AnimatedBorderBox color="#1a3a6e" bgColor="#ffffff">
+                <PlatformLogoImage platform="codeforces" width={150} height={48} />
+              </AnimatedBorderBox>
+
+              {/* LeetCode */}
+              <AnimatedBorderBox color="#FFA116" bgColor="#2a2a2a">
+                <PlatformLogoImage platform="leetcode" width={150} height={48} />
+              </AnimatedBorderBox>
+
+              {/* AtCoder */}
+              <AnimatedBorderBox color="#333333" bgColor="#ffffff">
+                <PlatformLogoImage platform="atcoder" width={100} height={80} />
+              </AnimatedBorderBox>
+
+              {/* CodeChef */}
+              <AnimatedBorderBox color="#5B4638" bgColor="#2d2319">
+                <PlatformLogoImage platform="codechef" width={160} height={56} />
+              </AnimatedBorderBox>
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="py-20 px-6 border-y border-zinc-800/50 bg-zinc-900/30">
-        <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8">
-          <AnimatedCounter value={100000} suffix="+" label="Problems Tracked" />
-          <AnimatedCounter value={50000} suffix="+" label="Active Users" />
-          <AnimatedCounter value={4} label="Platforms" />
-          <AnimatedCounter value={99} suffix="%" label="Uptime" />
+      {/* Motivational Quote Section */}
+      <section className="py-16 px-6 border-y border-zinc-800/50 bg-zinc-900/30">
+        <div className="max-w-7xl mx-auto">
+          <motion.div
+            className="text-center mb-6"
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+          >
+            <Sparkles className="w-6 h-6 text-cyan-400 mx-auto mb-4" />
+            <p className="text-zinc-500 text-sm uppercase tracking-wider">Daily Inspiration</p>
+          </motion.div>
+          <MotivationalQuote />
         </div>
       </section>
 
