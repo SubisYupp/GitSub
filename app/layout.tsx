@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CodeVault - Competitive Programming Archive",
-  description: "Archive and manage your favorite competitive programming problems from Codeforces, LeetCode, AtCoder, and CodeChef",
+  title: "CPulse - Track Your Competitive Programming Pulse",
+  description: "Track and manage your competitive programming journey. Archive problems from Codeforces, LeetCode, AtCoder, and CodeChef.",
 };
 
 export default function RootLayout({
