@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveSolution, getSolutionByProblemId } from '@/lib/db';
+import { getAuthenticatedUser } from '@/lib/supabase/db';
+import * as supabaseDb from '@/lib/supabase/db';
+import * as localDb from '@/lib/db';
 import { UserSolution } from '@/lib/types';
 import { randomUUID } from 'crypto';
+
+// Check if Supabase is configured
+const useSupabase = () => {
+  return !!(
+    process.env.NEXT_PUBLIC_SUPABASE_URL &&
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  );
+};
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,8 +25,27 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Check if solution exists
-    const existing = await getSolutionByProblemId(problemId);
+    if (useSupabase()) {
+      const user = await getAuthenticatedUser();
+      if (!user) {
+        return NextResponse.json(
+          { success: false, error: 'Authentication required' },
+          { status: 401 }
+        );
+      }
+      
+      const solution = await supabaseDb.saveSolution(user.id, {
+        problemId,
+        code,
+        language,
+        solved: solved ?? false,
+      });
+      
+      return NextResponse.json({ success: true, data: solution });
+    }
+    
+    // Fallback to local
+    const existing = await localDb.getSolutionByProblemId(problemId);
     
     const now = new Date().toISOString();
     const solution: UserSolution = {
@@ -30,7 +59,7 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
     };
     
-    await saveSolution(solution);
+    await localDb.saveSolution(solution);
     
     return NextResponse.json({ success: true, data: solution });
   } catch (error) {
