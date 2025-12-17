@@ -42,6 +42,7 @@ export default function SignupPage() {
       return;
     }
 
+    const redirectUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -49,7 +50,7 @@ export default function SignupPage() {
         data: {
           username: username,
         },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: `${redirectUrl.replace(/\/$/, '')}/auth/callback`,
       },
     });
 
@@ -65,10 +66,11 @@ export default function SignupPage() {
     setLoading(true);
     setError('');
     
+    const redirectUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${redirectUrl.replace(/\/$/, '')}/auth/callback`,
       },
     });
     
