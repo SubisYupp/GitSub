@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Plus, Link as LinkIcon } from 'lucide-react';
 
 interface URLInputProps {
@@ -59,9 +59,11 @@ export default function URLInput({ onParse }: URLInputProps) {
           "
           disabled={loading}
         />
-        <button
+        <motion.button
           type="submit"
           disabled={loading}
+          whileHover={!loading ? { scale: 1.02 } : {}}
+          whileTap={!loading ? { scale: 0.98 } : {}}
           className="
             absolute right-2 top-1/2 -translate-y-1/2
             px-6 py-2
@@ -72,30 +74,49 @@ export default function URLInput({ onParse }: URLInputProps) {
             disabled:opacity-50 disabled:cursor-not-allowed
             transition-all
             flex items-center gap-2
+            shadow-lg shadow-cyan-500/20
+            hover:shadow-cyan-500/40
           "
         >
-          {loading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Parsing...
-            </>
-          ) : (
-            <>
-              <Plus className="w-4 h-4" />
-              Add to Vault
-            </>
-          )}
-        </button>
+          <AnimatePresence mode="wait">
+            {loading ? (
+              <motion.span
+                key="loading"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="flex items-center gap-2"
+              >
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Parsing...
+              </motion.span>
+            ) : (
+              <motion.span
+                key="add"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Add to CPulse
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </motion.button>
       </div>
-      {error && (
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mt-2 text-sm text-red-400"
-        >
-          {error}
-        </motion.p>
-      )}
+      <AnimatePresence>
+        {error && (
+          <motion.p
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="mt-2 text-sm text-red-400"
+          >
+            {error}
+          </motion.p>
+        )}
+      </AnimatePresence>
     </motion.form>
   );
 }
