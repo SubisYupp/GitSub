@@ -5,15 +5,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import URLInput from './components/URLInput';
 import ProblemCard from './components/ProblemCard';
 import AnimatedDropdown from './components/AnimatedDropdown';
+import { CodeforcesLogo, LeetCodeLogo, AtCoderLogo, CodeChefLogo } from './components/PlatformLogos';
 import { ProblemWithDetails, Codelist, Platform, PLATFORMS } from '@/lib/types';
-import { Activity, Sparkles, Filter, List, Plus, X, ChevronDown, Search, LayoutGrid, LayoutList } from 'lucide-react';
+import { Activity, Sparkles, Filter, List, Plus, X, ChevronDown, Search, LayoutGrid, LayoutList, Share2, Copy, Check, LogIn, LogOut, User } from 'lucide-react';
+import { useAuth } from './providers';
+import Link from 'next/link';
 
 type SolvedFilter = 'all' | 'solved' | 'unsolved';
 type ViewMode = 'grid' | 'list';
 
 export default function Home() {
+  const { user, loading: authLoading, signOut } = useAuth();
   const [problems, setProblems] = useState<ProblemWithDetails[]>([]);
-  const [codelists, setCodelists] = useState<Codelist[]>([]);
+  const [codelists, setCodelists] = useState<(Codelist & { isPublic?: boolean })[]>([]);
   const [loading, setLoading] = useState(true);
   
   // View mode
@@ -29,6 +33,11 @@ export default function Home() {
   const [showCreateCodelist, setShowCreateCodelist] = useState(false);
   const [newCodelistName, setNewCodelistName] = useState('');
   const [creatingCodelist, setCreatingCodelist] = useState(false);
+  
+  // Share modal
+  const [sharingCodelistId, setSharingCodelistId] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [copiedShare, setCopiedShare] = useState(false);
   
   const fetchProblems = async () => {
     try {
@@ -211,6 +220,38 @@ export default function Home() {
     }
   };
   
+  const handleShareCodelist = async (codelistId: string, isCurrentlyPublic: boolean) => {
+    try {
+      const response = await fetch(`/api/codelists/${codelistId}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic: !isCurrentlyPublic }),
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        await fetchCodelists();
+        if (!isCurrentlyPublic) {
+          setShareUrl(data.data.shareUrl);
+          setSharingCodelistId(codelistId);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to share codelist:', error);
+    }
+  };
+  
+  const copyShareUrl = async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedShare(true);
+      setTimeout(() => setCopiedShare(false), 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+    }
+  };
+  
   const activeFiltersCount = 
     (searchQuery.trim() ? 1 : 0) +
     (platformFilter !== 'all' ? 1 : 0) + 
@@ -226,22 +267,172 @@ export default function Home() {
   
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-black to-zinc-900">
+      {/* Share Modal */}
+      <AnimatePresence>
+        {sharingCodelistId && shareUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setSharingCodelistId(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-md w-full"
+            >
+              <h3 className="text-xl font-bold text-white mb-2">Share Codelist</h3>
+              <p className="text-zinc-400 text-sm mb-4">Anyone with this link can view your codelist</p>
+              
+              <div className="flex items-center gap-2 p-3 bg-zinc-800 rounded-lg mb-4">
+                <input
+                  type="text"
+                  value={shareUrl}
+                  readOnly
+                  className="flex-1 bg-transparent text-white text-sm outline-none"
+                />
+                <button
+                  onClick={copyShareUrl}
+                  className="p-2 hover:bg-zinc-700 rounded-lg transition-colors"
+                >
+                  {copiedShare ? (
+                    <Check className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <Copy className="w-4 h-4 text-zinc-400" />
+                  )}
+                </button>
+              </div>
+              
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setSharingCodelistId(null)}
+                  className="px-4 py-2 text-zinc-400 hover:text-white transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
       {/* Header */}
       <header className="border-b border-white/10 bg-black/20 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 py-6">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-lg">
-              <Activity className="w-6 h-6 text-white" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-lg">
+                <Activity className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white">CPulse</h1>
+                <p className="text-sm text-zinc-400">Track your competitive programming pulse</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white">CPulse</h1>
-              <p className="text-sm text-zinc-400">Track your competitive programming pulse</p>
+            
+            {/* Auth buttons */}
+            <div className="flex items-center gap-3">
+              {authLoading ? (
+                <div className="w-8 h-8 rounded-full bg-zinc-800 animate-pulse" />
+              ) : user ? (
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/50 rounded-lg">
+                    <User className="w-4 h-4 text-cyan-400" />
+                    <span className="text-sm text-zinc-300">{user.email?.split('@')[0]}</span>
+                  </div>
+                  <button
+                    onClick={signOut}
+                    className="flex items-center gap-2 px-3 py-2 text-zinc-400 hover:text-white hover:bg-zinc-800/50 rounded-lg transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span className="text-sm">Sign Out</span>
+                  </button>
+                </div>
+              ) : (
+                <Link
+                  href="/login"
+                  className="flex items-center gap-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-black font-medium rounded-lg transition-colors"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span className="text-sm">Sign In</span>
+                </Link>
+              )}
             </div>
           </div>
         </div>
       </header>
       
       <main className="max-w-7xl mx-auto px-6 py-12">
+        {/* Show login prompt if not authenticated */}
+        {!authLoading && !user ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center py-20"
+          >
+            <div className="w-20 h-20 bg-cyan-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <LogIn className="w-10 h-10 text-cyan-400" />
+            </div>
+            <h2 className="text-3xl font-bold text-white mb-4">
+              Sign in to get started
+            </h2>
+            <p className="text-zinc-400 text-lg max-w-md mx-auto mb-6">
+              Track your competitive programming journey by archiving problems from all major platforms.
+            </p>
+            
+            {/* Platform logos */}
+            <div className="flex items-center justify-center gap-6 mb-8">
+              <motion.div 
+                className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/30 rounded-xl"
+                whileHover={{ scale: 1.05, y: -2 }}
+              >
+                <CodeforcesLogo className="w-5 h-5 text-blue-400" />
+                <span className="text-blue-400 font-medium text-sm">Codeforces</span>
+              </motion.div>
+              <motion.div 
+                className="flex items-center gap-2 px-4 py-2 bg-orange-500/10 border border-orange-500/30 rounded-xl"
+                whileHover={{ scale: 1.05, y: -2 }}
+              >
+                <LeetCodeLogo className="w-5 h-5 text-orange-400" />
+                <span className="text-orange-400 font-medium text-sm">LeetCode</span>
+              </motion.div>
+              <motion.div 
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-xl"
+                whileHover={{ scale: 1.05, y: -2 }}
+              >
+                <AtCoderLogo className="w-5 h-5 text-emerald-400" />
+                <span className="text-emerald-400 font-medium text-sm">AtCoder</span>
+              </motion.div>
+              <motion.div 
+                className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-xl"
+                whileHover={{ scale: 1.05, y: -2 }}
+              >
+                <CodeChefLogo className="w-5 h-5 text-amber-400" />
+                <span className="text-amber-400 font-medium text-sm">CodeChef</span>
+              </motion.div>
+            </div>
+            
+            <div className="flex items-center justify-center gap-4">
+              <Link
+                href="/login"
+                className="flex items-center gap-2 px-6 py-3 bg-cyan-500 hover:bg-cyan-400 text-black font-semibold rounded-xl transition-colors"
+              >
+                <LogIn className="w-5 h-5" />
+                Sign In
+              </Link>
+              <Link
+                href="/landing"
+                className="flex items-center gap-2 px-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold rounded-xl transition-colors"
+              >
+                Learn More
+              </Link>
+            </div>
+          </motion.div>
+        ) : (
+          <>
         {/* Hero Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -411,29 +602,45 @@ export default function Home() {
               
               <AnimatePresence mode="popLayout">
                 {codelists.map((cl, idx) => (
-                  <motion.button
+                  <motion.div
                     key={cl.id}
                     layout
                     initial={{ opacity: 0, scale: 0.8, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.8, y: -10 }}
                     transition={{ duration: 0.2, delay: idx * 0.05 }}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => window.location.href = `/codelists/${cl.id}`}
                     className="group flex items-center gap-1 px-3 py-1.5 bg-zinc-800/50 border border-white/10 rounded-lg text-sm text-white hover:bg-zinc-700/50 hover:border-white/20 transition-colors"
                   >
-                    <span>{cl.name}</span>
-                    <span className="text-zinc-500">({cl.problemIds.length})</span>
-                    <motion.span
-                      initial={{ opacity: 0, width: 0 }}
-                      whileHover={{ opacity: 1, width: 'auto' }}
+                    <button
+                      onClick={() => window.location.href = `/codelists/${cl.id}`}
+                      className="flex items-center gap-1"
+                    >
+                      <span>{cl.name}</span>
+                      <span className="text-zinc-500">({cl.problemIds.length})</span>
+                    </button>
+                    {cl.isPublic && (
+                      <span className="ml-1 px-1.5 py-0.5 text-[10px] bg-emerald-500/20 text-emerald-400 rounded">
+                        Public
+                      </span>
+                    )}
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={(e) => { e.stopPropagation(); handleShareCodelist(cl.id, cl.isPublic || false); }}
+                      className="opacity-0 group-hover:opacity-100 ml-1 p-0.5 hover:bg-cyan-500/20 rounded transition-all"
+                      title={cl.isPublic ? 'Make Private' : 'Share Codelist'}
+                    >
+                      <Share2 className="w-3 h-3 text-cyan-400" />
+                    </motion.button>
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
                       onClick={(e) => { e.stopPropagation(); handleDeleteCodelist(cl.id); }}
-                      className="opacity-0 group-hover:opacity-100 ml-1 p-0.5 hover:bg-red-500/20 rounded transition-all"
+                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-red-500/20 rounded transition-all"
                     >
                       <X className="w-3 h-3 text-red-400" />
-                    </motion.span>
-                  </motion.button>
+                    </motion.button>
+                  </motion.div>
                 ))}
               </AnimatePresence>
               
@@ -643,6 +850,8 @@ export default function Home() {
           </motion.div>
         )}
         </AnimatePresence>
+        </>
+        )}
       </main>
     </div>
   );
