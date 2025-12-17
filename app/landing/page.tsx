@@ -18,17 +18,36 @@ import {
   BarChart3,
   Layers
 } from 'lucide-react';
+import { CodeforcesLogo, LeetCodeLogo, AtCoderLogo, CodeChefLogo, getPlatformLogo } from '@/app/components/PlatformLogos';
+
+// Seeded random number generator for consistent SSR/client values
+function seededRandom(seed: number) {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
+}
 
 // Animated particles floating in background
 function ParticleField() {
+  const [mounted, setMounted] = useState(false);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Use seeded random for consistent server/client rendering
   const particles = Array.from({ length: 60 }, (_, i) => ({
     id: i,
-    x: Math.random() * 100,
-    y: Math.random() * 100,
-    size: Math.random() * 3 + 1,
-    duration: Math.random() * 20 + 15,
-    delay: Math.random() * 10,
+    x: seededRandom(i * 1.1) * 100,
+    y: seededRandom(i * 2.2) * 100,
+    size: seededRandom(i * 3.3) * 3 + 1,
+    duration: seededRandom(i * 4.4) * 20 + 15,
+    delay: seededRandom(i * 5.5) * 10,
+    xOffset: seededRandom(i * 6.6) * 20 - 10,
   }));
+
+  if (!mounted) {
+    return <div className="fixed inset-0 overflow-hidden pointer-events-none" />;
+  }
 
   return (
     <div className="fixed inset-0 overflow-hidden pointer-events-none">
@@ -45,7 +64,7 @@ function ParticleField() {
           }}
           animate={{
             y: [0, -40, 0],
-            x: [0, Math.random() * 20 - 10, 0],
+            x: [0, particle.xOffset, 0],
             opacity: [0.1, 0.4, 0.1],
             scale: [1, 1.5, 1],
           }}
@@ -273,15 +292,18 @@ function FeatureCard({ icon: Icon, title, description, delay, gradient }: {
 
 // Platform badge component
 function PlatformBadge({ name, color, delay }: { name: string; color: string; delay: number }) {
+  const Logo = getPlatformLogo(name);
+  
   return (
     <motion.div
-      className={`px-5 py-2.5 rounded-xl border ${color} bg-zinc-900/50 backdrop-blur-sm`}
+      className={`flex items-center gap-3 px-6 py-3 rounded-xl border ${color} bg-zinc-900/50 backdrop-blur-sm`}
       initial={{ opacity: 0, scale: 0.8 }}
       whileInView={{ opacity: 1, scale: 1 }}
       viewport={{ once: true }}
       transition={{ duration: 0.4, delay }}
       whileHover={{ scale: 1.05, y: -2 }}
     >
+      {Logo && <Logo className="w-6 h-6" />}
       <span className="font-semibold">{name}</span>
     </motion.div>
   );
@@ -421,19 +443,6 @@ export default function LandingPage() {
               >
                 Start for Free
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </Link>
-            </motion.div>
-            <motion.div 
-              whileHover={{ scale: 1.05 }} 
-              whileTap={{ scale: 0.95 }}
-            >
-              <Link
-                href="https://github.com"
-                target="_blank"
-                className="inline-flex items-center gap-2 px-8 py-4 bg-zinc-800 text-white font-semibold rounded-xl border border-zinc-700 hover:border-zinc-600 hover:bg-zinc-700 transition-all"
-              >
-                <Github className="w-5 h-5" />
-                View on GitHub
               </Link>
             </motion.div>
           </motion.div>
