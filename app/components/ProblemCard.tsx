@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ProblemWithDetails, Codelist } from '@/lib/types';
 import { CheckCircle2, Circle, Trash2, List, Check, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -13,6 +13,7 @@ interface ProblemCardProps {
   onAddToCodelist?: (problemId: string, codelistId: string) => void;
   onRemoveFromCodelist?: (problemId: string, codelistId: string) => void;
   viewMode?: 'grid' | 'list';
+  index?: number;
 }
 
 const platformTheme = {
@@ -60,10 +61,12 @@ export default function ProblemCard({
   onAddToCodelist,
   onRemoveFromCodelist,
   viewMode = 'grid',
+  index = 0,
 }: ProblemCardProps) {
   const router = useRouter();
   const theme = platformTheme[problem.platform];
   const [showCodelistMenu, setShowCodelistMenu] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Find which codelists this problem belongs to
   const problemCodelists = codelists.filter(cl => cl.problemIds.includes(problem.id));
@@ -97,9 +100,20 @@ export default function ProblemCard({
   if (viewMode === 'list') {
     return (
       <motion.div
-        initial={{ opacity: 0, x: -10 }}
-        animate={{ opacity: 1, x: 0 }}
-        whileHover={{ x: 2 }}
+        layout="position"
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ 
+          duration: 0.2,
+          delay: Math.min(index * 0.02, 0.15), // Cap max delay at 150ms
+          ease: [0.25, 0.1, 0.25, 1]
+        }}
+        whileHover={{ 
+          x: 4,
+          transition: { duration: 0.15 }
+        }}
+        whileTap={{ scale: 0.995 }}
         className={`
           relative group cursor-pointer
           ${theme.bg} backdrop-blur-sm
@@ -173,35 +187,50 @@ export default function ProblemCard({
             </button>
             
             {/* Codelist Dropdown */}
-            {showCodelistMenu && (
-              <div 
-                className="absolute top-8 right-0 z-20 w-48 py-1 bg-zinc-900 border border-white/10 rounded-lg shadow-xl"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="px-3 py-2 text-xs text-zinc-500 uppercase tracking-wide border-b border-white/10">
-                  Add to Codelist
-                </div>
-                {codelists.map(cl => {
-                  const isInCodelist = cl.problemIds.includes(problem.id);
-                  return (
-                    <button
-                      key={cl.id}
-                      onClick={(e) => handleCodelistAction(e, cl.id, isInCodelist)}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-white/5 transition-colors"
-                    >
-                      {isInCodelist ? (
-                        <Check className="w-4 h-4 text-cyan-400" />
-                      ) : (
-                        <Plus className="w-4 h-4 text-zinc-500" />
-                      )}
-                      <span className={isInCodelist ? 'text-cyan-400' : 'text-white'}>
-                        {cl.name}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <AnimatePresence>
+              {showCodelistMenu && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                  transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
+                  className="absolute top-8 right-0 z-20 w-48 py-1 bg-zinc-900 border border-white/10 rounded-lg shadow-xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="px-3 py-2 text-xs text-zinc-500 uppercase tracking-wide border-b border-white/10">
+                    Add to Codelist
+                  </div>
+                  {codelists.map((cl, idx) => {
+                    const isInCodelist = cl.problemIds.includes(problem.id);
+                    return (
+                      <motion.button
+                        key={cl.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.03 }}
+                        onClick={(e) => handleCodelistAction(e, cl.id, isInCodelist)}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-white/5 transition-colors"
+                      >
+                        <motion.span
+                          initial={false}
+                          animate={{ scale: isInCodelist ? 1 : 0.8, opacity: isInCodelist ? 1 : 0.5 }}
+                          transition={{ duration: 0.15 }}
+                        >
+                          {isInCodelist ? (
+                            <Check className="w-4 h-4 text-cyan-400" />
+                          ) : (
+                            <Plus className="w-4 h-4 text-zinc-500" />
+                          )}
+                        </motion.span>
+                        <span className={isInCodelist ? 'text-cyan-400' : 'text-white'}>
+                          {cl.name}
+                        </span>
+                      </motion.button>
+                    );
+                  })}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         )}
         
@@ -221,9 +250,21 @@ export default function ProblemCard({
   // Grid View (default)
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -2 }}
+      layout="position"
+      initial={{ opacity: 0, y: 20, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ 
+        duration: 0.25,
+        delay: Math.min(index * 0.03, 0.2), // Cap max delay at 200ms
+        ease: [0.25, 0.1, 0.25, 1]
+      }}
+      whileHover={{ 
+        y: -4,
+        scale: 1.02,
+        transition: { duration: 0.2 }
+      }}
+      whileTap={{ scale: 0.98 }}
       className={`
         relative group cursor-pointer
         ${theme.bg} backdrop-blur-sm
@@ -261,35 +302,50 @@ export default function ProblemCard({
           </button>
           
           {/* Codelist Dropdown */}
-          {showCodelistMenu && (
-            <div 
-              className="absolute top-8 right-0 z-20 w-48 py-1 bg-zinc-900 border border-white/10 rounded-lg shadow-xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="px-3 py-2 text-xs text-zinc-500 uppercase tracking-wide border-b border-white/10">
-                Add to Codelist
-              </div>
-              {codelists.map(cl => {
-                const isInCodelist = cl.problemIds.includes(problem.id);
-                return (
-                  <button
-                    key={cl.id}
-                    onClick={(e) => handleCodelistAction(e, cl.id, isInCodelist)}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-white/5 transition-colors"
-                  >
-                    {isInCodelist ? (
-                      <Check className="w-4 h-4 text-cyan-400" />
-                    ) : (
-                      <Plus className="w-4 h-4 text-zinc-500" />
-                    )}
-                    <span className={isInCodelist ? 'text-cyan-400' : 'text-white'}>
-                      {cl.name}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <AnimatePresence>
+            {showCodelistMenu && (
+              <motion.div 
+                initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                transition={{ duration: 0.15, ease: [0.4, 0, 0.2, 1] }}
+                className="absolute top-8 right-0 z-20 w-48 py-1 bg-zinc-900 border border-white/10 rounded-lg shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-3 py-2 text-xs text-zinc-500 uppercase tracking-wide border-b border-white/10">
+                  Add to Codelist
+                </div>
+                {codelists.map((cl, idx) => {
+                  const isInCodelist = cl.problemIds.includes(problem.id);
+                  return (
+                    <motion.button
+                      key={cl.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.03 }}
+                      onClick={(e) => handleCodelistAction(e, cl.id, isInCodelist)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-white/5 transition-colors"
+                    >
+                      <motion.span
+                        initial={false}
+                        animate={{ scale: isInCodelist ? 1 : 0.8, opacity: isInCodelist ? 1 : 0.5 }}
+                        transition={{ duration: 0.15 }}
+                      >
+                        {isInCodelist ? (
+                          <Check className="w-4 h-4 text-cyan-400" />
+                        ) : (
+                          <Plus className="w-4 h-4 text-zinc-500" />
+                        )}
+                      </motion.span>
+                      <span className={isInCodelist ? 'text-cyan-400' : 'text-white'}>
+                        {cl.name}
+                      </span>
+                    </motion.button>
+                  );
+                })}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
       
