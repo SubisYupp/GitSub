@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Editor from '@monaco-editor/react';
-import { CheckCircle2, Circle, Save } from 'lucide-react';
+import { CheckCircle2, Circle, Save, Check } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface CodeEditorProps {
   code: string;
@@ -11,7 +12,7 @@ interface CodeEditorProps {
   onCodeChange: (code: string) => void;
   onLanguageChange: (language: string) => void;
   onSolvedChange: (solved: boolean) => void;
-  onSave: () => void;
+  onSave: () => Promise<void> | void;
   saving?: boolean;
 }
 
@@ -33,8 +34,16 @@ export default function CodeEditor({
   onSave,
   saving = false,
 }: CodeEditorProps) {
+  const [showSaved, setShowSaved] = useState(false);
+  
+  const handleSave = async () => {
+    await onSave();
+    setShowSaved(true);
+    setTimeout(() => setShowSaved(false), 2000);
+  };
+  
   return (
-    <div className="flex flex-col h-full bg-[#1e1e1e] rounded-lg overflow-hidden border border-white/10">
+    <div className="flex flex-col h-full bg-[#1e1e1e] rounded-lg overflow-hidden border border-white/10 relative">
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-3 bg-zinc-900/50 border-b border-white/10">
         <div className="flex items-center gap-4">
@@ -43,13 +52,14 @@ export default function CodeEditor({
             onChange={(e) => onLanguageChange(e.target.value)}
             className="
               px-3 py-1.5
-              bg-white/5 border border-white/10 rounded
+              bg-zinc-800 border border-white/10 rounded
               text-white text-sm
               focus:outline-none focus:ring-2 focus:ring-cyan-500/50
+              cursor-pointer
             "
           >
             {languages.map((lang) => (
-              <option key={lang.value} value={lang.value}>
+              <option key={lang.value} value={lang.value} className="bg-zinc-800 text-white">
                 {lang.label}
               </option>
             ))}
@@ -81,7 +91,7 @@ export default function CodeEditor({
         </div>
         
         <button
-          onClick={onSave}
+          onClick={handleSave}
           disabled={saving}
           className="
             flex items-center gap-2 px-4 py-1.5
@@ -95,6 +105,27 @@ export default function CodeEditor({
           {saving ? 'Saving...' : 'Save'}
         </button>
       </div>
+      
+      {/* Saved Toast Notification */}
+      <AnimatePresence>
+        {showSaved && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="
+              absolute top-16 right-4 z-20
+              flex items-center gap-2 px-4 py-2
+              bg-green-500/20 border border-green-500/30
+              text-green-400 rounded-lg
+              backdrop-blur-sm
+            "
+          >
+            <Check className="w-4 h-4" />
+            <span className="text-sm font-medium">Saved!</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* Editor */}
       <div className="flex-1">

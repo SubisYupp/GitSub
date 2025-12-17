@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Save, FileText } from 'lucide-react';
+import { Save, FileText, Check } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface NotesEditorProps {
   content: string;
   onContentChange: (content: string) => void;
-  onSave: () => void;
+  onSave: () => Promise<void> | void;
   saving?: boolean;
 }
 
@@ -16,8 +17,16 @@ export default function NotesEditor({
   onSave,
   saving = false,
 }: NotesEditorProps) {
+  const [showSaved, setShowSaved] = useState(false);
+  
+  const handleSave = async () => {
+    await onSave();
+    setShowSaved(true);
+    setTimeout(() => setShowSaved(false), 2000);
+  };
+  
   return (
-    <div className="flex flex-col h-full bg-zinc-900/30 backdrop-blur-xl rounded-lg border border-white/10 overflow-hidden">
+    <div className="flex flex-col h-full bg-zinc-900/30 backdrop-blur-xl rounded-lg border border-white/10 overflow-hidden relative">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-zinc-900/50 border-b border-white/10">
         <div className="flex items-center gap-2 text-white">
@@ -25,7 +34,7 @@ export default function NotesEditor({
           <span className="font-medium">Notes</span>
         </div>
         <button
-          onClick={onSave}
+          onClick={handleSave}
           disabled={saving}
           className="
             flex items-center gap-2 px-4 py-1.5
@@ -39,6 +48,27 @@ export default function NotesEditor({
           {saving ? 'Saving...' : 'Save'}
         </button>
       </div>
+      
+      {/* Saved Toast Notification */}
+      <AnimatePresence>
+        {showSaved && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="
+              absolute top-14 right-4 z-20
+              flex items-center gap-2 px-4 py-2
+              bg-green-500/20 border border-green-500/30
+              text-green-400 rounded-lg
+              backdrop-blur-sm
+            "
+          >
+            <Check className="w-4 h-4" />
+            <span className="text-sm font-medium">Saved!</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* Editor */}
       <textarea
