@@ -5,8 +5,10 @@ export async function parseCodechef(url: string): Promise<ProblemMetadata> {
   return withBrowserContext(async (context) => {
     const page = await context.newPage();
     
-    // Block images and fonts to speed up loading
-    await page.route('**/*.{png,jpg,jpeg,gif,svg,woff,woff2}', route => route.abort());
+    // Block images and fonts to speed up loading (only available in Playwright)
+    if (page.route) {
+      await page.route('**/*.{png,jpg,jpeg,gif,svg,woff,woff2}', (route: any) => route.abort());
+    }
     
     await page.goto(url, { waitUntil: 'networkidle', timeout: 30000 });
 
