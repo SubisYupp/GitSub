@@ -24,19 +24,16 @@ export async function POST(request: NextRequest) {
     }
     
     if (useSupabase()) {
+      // Try to get user, but don't require it - middleware handles auth
       const user = await getAuthenticatedUser();
-      if (!user) {
-        return NextResponse.json(
-          { success: false, error: 'Authentication required' },
-          { status: 401 }
-        );
-      }
       
       // Check if problem already exists globally
       const existingByUrl = await supabaseDb.getProblemByUrl(url);
       if (existingByUrl) {
-        // Add to user's problems
-        await supabaseDb.addProblemToUser(user.id, existingByUrl.id);
+        // Add to user's problems if user is authenticated
+        if (user) {
+          await supabaseDb.addProblemToUser(user.id, existingByUrl.id);
+        }
         return NextResponse.json({
           success: true,
           data: existingByUrl,
@@ -52,7 +49,9 @@ export async function POST(request: NextRequest) {
       // Check by ID
       const existingById = await supabaseDb.getProblemById(problem.id);
       if (existingById) {
-        await supabaseDb.addProblemToUser(user.id, existingById.id);
+        if (user) {
+          await supabaseDb.addProblemToUser(user.id, existingById.id);
+        }
         return NextResponse.json({
           success: true,
           data: existingById,
@@ -60,9 +59,11 @@ export async function POST(request: NextRequest) {
         });
       }
       
-      // Save globally and add to user
+      // Save globally and add to user if authenticated
       const savedProblem = await supabaseDb.saveProblem(problem);
-      await supabaseDb.addProblemToUser(user.id, savedProblem.id);
+      if (user) {
+        await supabaseDb.addProblemToUser(user.id, savedProblem.id);
+      }
       
       return NextResponse.json({
         success: true,
