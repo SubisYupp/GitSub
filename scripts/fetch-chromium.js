@@ -39,13 +39,22 @@ async function fetchChromium() {
     console.error('❌ Chromium still not found after download attempt');
 
     // Try alternative approach - run npx to download
-    console.log('Trying alternative download method...');
-    execSync('npx @sparticuz/chromium --version', { stdio: 'inherit' });
-    // Re-check
-    const pathAfterNpx = await chromium.executablePath();
-    if (fs.existsSync(pathAfterNpx)) {
-      console.log('✅ Chromium downloaded successfully via npx');
-      return;
+    console.log('Trying alternative download method (npx install)...');
+    try {
+      execSync('npx @sparticuz/chromium install --yes', { stdio: 'inherit' });
+    } catch (installErr) {
+      console.error('npx install failed:', installErr && installErr.message ? installErr.message : String(installErr));
+    }
+
+    // Re-check after npx install
+    try {
+      const pathAfterNpx = await chromium.executablePath();
+      if (fs.existsSync(pathAfterNpx)) {
+        console.log('✅ Chromium downloaded successfully via npx');
+        return;
+      }
+    } catch (recheckErr) {
+      console.error('Re-check after npx failed:', recheckErr && recheckErr.message ? recheckErr.message : String(recheckErr));
     }
 
     console.error('❌ Alternative download also failed: chromium binaries not found');
