@@ -13,32 +13,54 @@ async function fetchChromium() {
     const executablePath = await chromium.executablePath();
     console.log('Chromium executable path:', executablePath);
 
-    // Check if the bin directory exists
-    const binDir = path.dirname(executablePath);
-    if (fs.existsSync(binDir)) {
-      console.log('✅ Chromium binaries found at:', binDir);
-    } else {
-      console.log('❌ Chromium binaries not found, attempting to download...');
+    // Check if the executable exists
+    if (fs.existsSync(executablePath)) {
+      console.log('✅ Chromium executable found at:', executablePath);
 
-      // Force download by calling executablePath again
-      const path = await chromium.executablePath();
-      console.log('Downloaded to:', path);
+      // Also check the bin directory
+      const binDir = path.dirname(executablePath);
+      console.log('✅ Chromium bin directory:', binDir);
+      console.log('✅ @sparticuz/chromium setup complete');
+      return;
     }
 
-    console.log('✅ @sparticuz/chromium setup complete');
-  } catch (error) {
-    console.error('❌ Failed to fetch chromium binaries:', error.message);
+    console.log('❌ Chromium executable not found, attempting to download...');
+
+    // Force download by calling executablePath again
+    const pathAgain = await chromium.executablePath();
+    console.log('After retry, path:', pathAgain);
+
+    if (fs.existsSync(pathAgain)) {
+      console.log('✅ Chromium downloaded successfully');
+      console.log('✅ @sparticuz/chromium setup complete');
+      return;
+    }
+
+    console.error('❌ Chromium still not found after download attempt');
 
     // Try alternative approach - run npx to download
-    try {
-      console.log('Trying alternative download method...');
-      execSync('npx @sparticuz/chromium --version', { stdio: 'inherit' });
-      console.log('✅ Alternative download successful');
-    } catch (altError) {
-      console.error('❌ Alternative download also failed:', altError.message);
-      process.exit(1);
+    console.log('Trying alternative download method...');
+    execSync('npx @sparticuz/chromium --version', { stdio: 'inherit' });
+    // Re-check
+    const pathAfterNpx = await chromium.executablePath();
+    if (fs.existsSync(pathAfterNpx)) {
+      console.log('✅ Chromium downloaded successfully via npx');
+      return;
     }
+
+    console.error('❌ Alternative download also failed: chromium binaries not found');
+    // Fail the install so deployment stops (safer than continuing without browser)
+    console.error('FATAL: chromium binaries are required. Aborting install.');
+    process.exit(1);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Failed to fetch chromium binaries:', msg);
+    console.error('FATAL: chromium binaries are required. Aborting install.');
+    process.exit(1);
   }
 }
 
-fetchChromium();
+fetchChromium().catch(error => {
+  console.error('Unhandled error in fetchChromium:', error);
+  // Don't exit with error to avoid breaking builds
+});

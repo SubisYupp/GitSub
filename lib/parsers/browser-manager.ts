@@ -97,51 +97,25 @@ class BrowserManager {
   
   private async launchBrowser(): Promise<UnifiedBrowser> {
     if (isServerless) {
-      // Use Puppeteer with @sparticuz/chromium for serverless
-      console.log('[BrowserManager] Launching Puppeteer for serverless environment');
-      const puppeteer = await getPuppeteer();
+      console.log('[BrowserManager] Launching browser for serverless environment');
 
-      if (!chromiumModule) {
-        chromiumModule = await import('@sparticuz/chromium');
-      }
-
-      // Ensure chromium is downloaded
-      let executablePath: string;
       try {
-        const pathResult = await getChromiumPath();
-        if (!pathResult) {
-          throw new Error('Chromium executable path is undefined');
-        }
-        executablePath = pathResult;
-        console.log('[BrowserManager] Chromium executable path:', executablePath);
-
-        // Verify the executable exists
-        const fs = await import('fs');
-        if (!fs.existsSync(executablePath)) {
-          throw new Error(`Chromium executable not found at ${executablePath}`);
-        }
+        // Try @sparticuz/chromium first
+        return await this.launchWithSparticuzChromium();
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error('[BrowserManager] Chromium download failed:', errorMessage);
-        throw new Error('Failed to download Chromium binaries. Please try rebuilding the project.');
+        console.warn('[BrowserManager] @sparticuz/chromium failed, trying fallback:', error);
+
+        try {
+          // Fallback: Try system chromium
+          return await this.launchWithSystemChromium();
+        } catch (fallbackError) {
+          console.error('[BrowserManager] All chromium launch attempts failed');
+          throw new Error(
+            'Browser setup failed. This is likely due to missing Chromium binaries in the serverless environment. ' +
+            'Please contact support or try again later.'
+          );
+        }
       }
-
-      const browser = await puppeteer.launch({
-        args: chromiumModule.default.args,
-        defaultViewport: { width: 1920, height: 1080 },
-        executablePath,
-        headless: true,
-      });
-
-      console.log('[BrowserManager] Puppeteer browser launched');
-
-      return {
-        type: 'puppeteer',
-        browser,
-        close: async () => {
-          await browser.close();
-        },
-      };
     } else {
       // Use Playwright for local development
       console.log('[BrowserManager] Launching Playwright for local development');
@@ -173,6 +147,98 @@ class BrowserManager {
         },
       };
     }
+  }
+
+  private async launchWithSparticuzChromium(): Promise<UnifiedBrowser> {
+    console.log('[BrowserManager] Trying @sparticuz/chromium...');
+    const puppeteer = await getPuppeteer();
+
+    if (!chromiumModule) {
+      chromiumModule = await import('@sparticuz/chromium');
+    }
+
+    // Try to get executable path with retries
+    let executablePath: string | undefined;
+    let attempts = 0;
+    const maxAttempts = 3;
+
+    while (attempts < maxAttempts) {
+      try {
+        const pathResult = await getChromiumPath();
+        if (!pathResult) {
+          throw new Error('Chromium executable path is undefined');
+        }
+        executablePath = pathResult;
+        console.log('[BrowserManager] Chromium executable path:', executablePath);
+
+        // Verify the executable exists
+        const fs = await import('fs');
+        if (!fs.existsSync(executablePath)) {
+          throw new Error(`Chromium executable not found at ${executablePath}`);
+        }
+        break; // Success, exit retry loop
+      } catch (error) {
+        attempts++;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.warn(`[BrowserManager] Chromium attempt ${attempts}/${maxAttempts} failed:`, errorMessage);
+
+        if (attempts >= maxAttempts) {
+          throw new Error(`Failed to get Chromium executable after ${maxAttempts} attempts: ${errorMessage}`);
+        }
+
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
+      }
+    }
+
+    if (!executablePath) {
+      throw new Error('Failed to obtain chromium executable path');
+    }
+
+    const browser = await puppeteer.launch({
+      args: chromiumModule.default.args,
+      defaultViewport: { width: 1920, height: 1080 },
+      executablePath,
+      headless: true,
+    });
+
+    console.log('[BrowserManager] @sparticuz/chromium browser launched successfully');
+
+    return {
+      type: 'puppeteer',
+      browser,
+      close: async () => {
+        await browser.close();
+      },
+    };
+  }
+
+  private async launchWithSystemChromium(): Promise<UnifiedBrowser> {
+    console.log('[BrowserManager] Trying system chromium as fallback...');
+    const puppeteer = await getPuppeteer();
+
+    // Try launching with system chromium (may work on some serverless platforms)
+    const browser = await puppeteer.launch({
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor',
+      ],
+      headless: true,
+    });
+
+    console.log('[BrowserManager] System chromium browser launched successfully');
+
+    return {
+      type: 'puppeteer',
+      browser,
+      close: async () => {
+        await browser.close();
+      },
+    };
   }
   
   async createContext(): Promise<UnifiedContext> {
