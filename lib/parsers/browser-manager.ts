@@ -100,21 +100,41 @@ class BrowserManager {
       // Use Puppeteer with @sparticuz/chromium for serverless
       console.log('[BrowserManager] Launching Puppeteer for serverless environment');
       const puppeteer = await getPuppeteer();
-      const executablePath = await getChromiumPath();
-      
+
       if (!chromiumModule) {
         chromiumModule = await import('@sparticuz/chromium');
       }
-      
+
+      // Ensure chromium is downloaded
+      let executablePath: string;
+      try {
+        const pathResult = await getChromiumPath();
+        if (!pathResult) {
+          throw new Error('Chromium executable path is undefined');
+        }
+        executablePath = pathResult;
+        console.log('[BrowserManager] Chromium executable path:', executablePath);
+
+        // Verify the executable exists
+        const fs = await import('fs');
+        if (!fs.existsSync(executablePath)) {
+          throw new Error(`Chromium executable not found at ${executablePath}`);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[BrowserManager] Chromium download failed:', errorMessage);
+        throw new Error('Failed to download Chromium binaries. Please try rebuilding the project.');
+      }
+
       const browser = await puppeteer.launch({
         args: chromiumModule.default.args,
         defaultViewport: { width: 1920, height: 1080 },
         executablePath,
         headless: true,
       });
-      
+
       console.log('[BrowserManager] Puppeteer browser launched');
-      
+
       return {
         type: 'puppeteer',
         browser,
@@ -126,7 +146,7 @@ class BrowserManager {
       // Use Playwright for local development
       console.log('[BrowserManager] Launching Playwright for local development');
       const chromium = await getPlaywright();
-      
+
       const browser = await chromium.launch({
         headless: true,
         args: [
@@ -136,15 +156,15 @@ class BrowserManager {
           '--no-sandbox',
         ],
       });
-      
+
       console.log('[BrowserManager] Playwright browser launched');
-      
+
       browser.on('disconnected', () => {
         console.log('[BrowserManager] Browser disconnected');
         this.browser = null;
         this.initPromise = null;
       });
-      
+
       return {
         type: 'playwright',
         browser,
